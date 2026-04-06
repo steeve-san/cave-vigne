@@ -59,6 +59,9 @@ android/keystore.properties
 coverage/
 .nyc_output/
 
+# ─── Claude Code ────────────────────────────────────────────
+CLAUDE.md
+
 # ─── Misc ───────────────────────────────────────────────────
 *.zip
 *.tar.gz
