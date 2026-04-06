@@ -1,26 +1,33 @@
 {
   "name": "cave-vigne-frontend",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=11.12.1"
+  },
   "dependencies": {
-    "@tanstack/react-query": "^5.17.19",
-    "axios": "^1.6.5",
-    "bootstrap": "^5.3.2",
-    "bootstrap-icons": "^1.11.3",
-    "d3": "^7.9.0",
-    "topojson-client": "^3.1.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.3",
-    "react-scripts": "5.0.1",
-    "react-hot-toast": "^2.4.1",
-    "react-dropzone": "^14.2.3"
+    "@tanstack/react-query": "^5.62.16",
+    "axios":                 "^1.7.9",
+    "bootstrap":             "^5.3.3",
+    "bootstrap-icons":       "^1.11.3",
+    "d3":                    "^7.9.0",
+    "topojson-client":       "^3.1.0",
+    "react":                 "^18.3.1",
+    "react-dom":             "^18.3.1",
+    "react-router-dom":      "^6.28.0",
+    "react-scripts":         "5.0.1",
+    "react-hot-toast":       "^2.4.1",
+    "react-dropzone":        "^14.3.5"
   },
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test"
+    "test":  "react-scripts test"
   },
-  "browserslist": { "production": [">0.2%", "not dead"], "development": ["last 1 chrome version"] },
+  "browserslist": {
+    "production": [">0.2%", "not dead"],
+    "development": ["last 1 chrome version"]
+  },
   "proxy": "http://localhost:3001"
 }

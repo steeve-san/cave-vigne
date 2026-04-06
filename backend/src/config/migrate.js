@@ -8,12 +8,15 @@ async function migrate() {
     port: process.env.DB_PORT,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    multipleStatements: true
+    multipleStatements: true,
   });
 
-  await conn.query(`CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+  await conn.query(
+    `CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+  );
   await conn.query(`USE \`${process.env.DB_NAME}\`;`);
 
+  // Création tables (idempotente)
   const schema = `
     CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -21,7 +24,7 @@ async function migrate() {
       password_hash VARCHAR(255) NOT NULL,
       username VARCHAR(100) NOT NULL,
       avatar_url VARCHAR(500),
-      role ENUM('user','admin') DEFAULT 'user',
+      role ENUM('visiteur','user','admin') DEFAULT 'user',
       is_active BOOLEAN DEFAULT TRUE,
       email_verified BOOLEAN DEFAULT FALSE,
       last_login DATETIME,
@@ -113,8 +116,21 @@ async function migrate() {
   `;
 
   await conn.query(schema);
+
+  // Mise à jour du schéma existant — ajoute visiteur si absent du ENUM
+  try {
+    await conn.query(`
+      ALTER TABLE users MODIFY COLUMN role ENUM('visiteur','user','admin') DEFAULT 'user';
+    `);
+  } catch {
+    // Déjà à jour
+  }
+
   console.log('✅ Migration terminée avec succès');
   await conn.end();
 }
 
-migrate().catch(err => { console.error('❌ Erreur migration:', err); process.exit(1); });
+migrate().catch(err => {
+  console.error('❌ Erreur migration:', err);
+  process.exit(1);
+});

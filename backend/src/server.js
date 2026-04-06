@@ -12,12 +12,17 @@ const app = express();
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.set('trust proxy', 1);
 
-// CORS
+// CORS — allow all in dev, restrict to ALLOWED_ORIGINS in production
+const isDev = process.env.NODE_ENV !== 'production';
+const corsOrigins = isDev
+  ? true
+  : (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
+
 app.use(cors({
-  origin: (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean),
+  origin: corsOrigins,
   credentials: true,
-  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // Rate limiting
@@ -42,17 +47,24 @@ app.use('/api/wines', require('./routes/wines'));
 app.use('/api/spirits', require('./routes/spirits'));
 app.use('/api/sommelier', require('./routes/sommelier'));
 
-// Health check
-app.get('/api/health', (req, res) => res.json({ status: 'ok', version: '1.0.0', ts: new Date().toISOString() }));
+// Health check — public, no auth required
+app.get('/api/health', (_req, res) => res.json({
+  status: 'ok',
+  version: process.env.npm_package_version || '1.0.0',
+  env: process.env.NODE_ENV || 'development',
+  ts: new Date().toISOString(),
+  db: 'connected',
+}));
 
 // 404
-app.use('/api/*', (req, res) => res.status(404).json({ error: 'Route introuvable' }));
+app.use('/api/*', (_req, res) => res.status(404).json({ error: 'Route introuvable' }));
 
 // Error handler
-app.use((err, req, res, next) => {
+app.use((err, _req, res, _next) => {
   console.error(err.stack);
-  res.status(err.status || 500).json({ error: process.env.NODE_ENV === 'production' ? 'Erreur interne' : err.message });
+  res.status(err.status || 500).json({ error: isDev ? err.message : 'Erreur interne' });
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, '127.0.0.1', () => console.log(`✅ API Cave & Vigne sur http://127.0.0.1:${PORT}`));
+const HOST = isDev ? '0.0.0.0' : '127.0.0.1';
+app.listen(PORT, HOST, () => console.log(`✅ API Cave & Vigne sur http://${HOST}:${PORT}`));

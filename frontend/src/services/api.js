@@ -12,7 +12,7 @@ api.interceptors.request.use(cfg => {
   return cfg;
 });
 
-// Auto-refresh on 401
+// Auto-refresh on 401 TOKEN_EXPIRED
 let refreshing = null;
 api.interceptors.response.use(
   r => r,
@@ -22,8 +22,18 @@ api.interceptors.response.use(
       orig._retry = true;
       if (!refreshing) {
         refreshing = axios.post(`${API_BASE}/auth/refresh`, { refresh: localStorage.getItem('cv_refresh') })
-          .then(r => { localStorage.setItem('cv_access', r.data.access); localStorage.setItem('cv_refresh', r.data.refresh); refreshing = null; return r.data.access; })
-          .catch(() => { localStorage.removeItem('cv_access'); localStorage.removeItem('cv_refresh'); window.location.href = '/login'; refreshing = null; });
+          .then(r => {
+            localStorage.setItem('cv_access', r.data.access);
+            localStorage.setItem('cv_refresh', r.data.refresh);
+            refreshing = null;
+            return r.data.access;
+          })
+          .catch(() => {
+            localStorage.removeItem('cv_access');
+            localStorage.removeItem('cv_refresh');
+            window.location.href = '/login';
+            refreshing = null;
+          });
       }
       const token = await refreshing;
       orig.headers.Authorization = `Bearer ${token}`;
@@ -35,35 +45,48 @@ api.interceptors.response.use(
 
 export default api;
 
-// Auth
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 export const authAPI = {
-  login: (email, password) => api.post('/auth/login', { email, password }),
+  login:    (email, password) => api.post('/auth/login', { email, password }),
   register: (email, username, password) => api.post('/auth/register', { email, username, password }),
-  logout: () => api.post('/auth/logout', { refresh: localStorage.getItem('cv_refresh') }),
-  me: () => api.get('/auth/me'),
+  logout:   () => api.post('/auth/logout', { refresh: localStorage.getItem('cv_refresh') }),
+  me:       () => api.get('/auth/me'),
 };
 
-// Wines
+// ─── Wines ────────────────────────────────────────────────────────────────────
 export const winesAPI = {
-  list: (params) => api.get('/wines', { params }),
-  create: (data) => api.post('/wines', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  update: (id, data) => api.put(`/wines/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  remove: (id) => api.delete(`/wines/${id}`),
+  list:      (params) => api.get('/wines', { params }),
+  create:    (data)   => api.post('/wines', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  update:    (id, data) => api.put(`/wines/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  remove:    (id)     => api.delete(`/wines/${id}`),
   addAccord: (id, data) => api.post(`/wines/${id}/accords`, data),
-  stats: () => api.get('/wines/stats'),
+  stats:     ()       => api.get('/wines/stats'),
 };
 
-// Spirits
+// ─── Spirits ──────────────────────────────────────────────────────────────────
 export const spiritsAPI = {
-  list: (params) => api.get('/spirits', { params }),
-  create: (data) => api.post('/spirits', data),
+  list:   (params) => api.get('/spirits', { params }),
+  create: (data)   => api.post('/spirits', data),
   update: (id, data) => api.put(`/spirits/${id}`, data),
-  remove: (id) => api.delete(`/spirits/${id}`),
+  remove: (id)     => api.delete(`/spirits/${id}`),
 };
 
-// Sommelier
+// ─── Sommelier ────────────────────────────────────────────────────────────────
 export const sommelierAPI = {
-  accord: (query) => api.post('/sommelier/accord', { query }),
-  scan: (formData) => api.post('/sommelier/scan', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  history: () => api.get('/sommelier/history'),
+  accord:  (query)    => api.post('/sommelier/accord', { query }),
+  scan:    (formData) => api.post('/sommelier/scan', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  history: ()         => api.get('/sommelier/history'),
+};
+
+// ─── Admin ────────────────────────────────────────────────────────────────────
+export const adminAPI = {
+  listUsers:   ()           => api.get('/auth/admin/users'),
+  createUser:  (data)       => api.post('/auth/admin/users', data),
+  updateUser:  (id, data)   => api.put(`/auth/admin/users/${id}`, data),
+  deleteUser:  (id)         => api.delete(`/auth/admin/users/${id}`),
+};
+
+// ─── Health ───────────────────────────────────────────────────────────────────
+export const healthAPI = {
+  check: () => api.get('/health'),
 };

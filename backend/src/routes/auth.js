@@ -5,14 +5,15 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const db = require('../config/db');
 const auth = require('../middleware/auth');
+const { requireRole } = require('../middleware/auth');
 
 const genTokens = (userId) => {
-  const access = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+  const access  = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
   const refresh = jwt.sign({ userId, type: 'refresh' }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d' });
   return { access, refresh };
 };
 
-// POST /api/auth/register
+// ─── POST /api/auth/register ──────────────────────────────────────────────────
 router.post('/register', [
   body('email').isEmail().normalizeEmail(),
   body('username').trim().isLength({ min: 2, max: 50 }),
@@ -28,21 +29,25 @@ router.post('/register', [
 
     const hash = await bcrypt.hash(password, 12);
     const [result] = await db.query(
-      'INSERT INTO users (email, username, password_hash) VALUES (?, ?, ?)',
+      "INSERT INTO users (email, username, password_hash, role) VALUES (?, ?, ?, 'user')",
       [email, username, hash]
     );
     const tokens = genTokens(result.insertId);
     const expiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1000);
-    await db.query('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)', [result.insertId, tokens.refresh, expiresAt]);
+    await db.query('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
+      [result.insertId, tokens.refresh, expiresAt]);
 
-    res.status(201).json({ user: { id: result.insertId, email, username }, ...tokens });
+    res.status(201).json({
+      user: { id: result.insertId, email, username, role: 'user' },
+      ...tokens
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
-// POST /api/auth/login
+// ─── POST /api/auth/login ─────────────────────────────────────────────────────
 router.post('/login', [
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty(),
@@ -64,16 +69,20 @@ router.post('/login', [
     await db.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
     const tokens = genTokens(user.id);
     const expiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1000);
-    await db.query('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)', [user.id, tokens.refresh, expiresAt]);
+    await db.query('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
+      [user.id, tokens.refresh, expiresAt]);
 
-    res.json({ user: { id: user.id, email: user.email, username: user.username, avatar_url: user.avatar_url, role: user.role }, ...tokens });
+    res.json({
+      user: { id: user.id, email: user.email, username: user.username, avatar_url: user.avatar_url, role: user.role },
+      ...tokens
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
-// POST /api/auth/refresh
+// ─── POST /api/auth/refresh ───────────────────────────────────────────────────
 router.post('/refresh', async (req, res) => {
   const { refresh } = req.body;
   if (!refresh) return res.status(400).json({ error: 'Refresh token manquant' });
@@ -81,30 +90,119 @@ router.post('/refresh', async (req, res) => {
     const decoded = jwt.verify(refresh, process.env.JWT_SECRET);
     if (decoded.type !== 'refresh') return res.status(401).json({ error: 'Token invalide' });
 
-    const [rows] = await db.query('SELECT * FROM refresh_tokens WHERE token = ? AND expires_at > NOW()', [refresh]);
+    const [rows] = await db.query(
+      'SELECT * FROM refresh_tokens WHERE token = ? AND expires_at > NOW()', [refresh]);
     if (!rows.length) return res.status(401).json({ error: 'Token expiré ou révoqué' });
 
     await db.query('DELETE FROM refresh_tokens WHERE token = ?', [refresh]);
     const tokens = genTokens(decoded.userId);
     const expiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1000);
-    await db.query('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)', [decoded.userId, tokens.refresh, expiresAt]);
+    await db.query('INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
+      [decoded.userId, tokens.refresh, expiresAt]);
 
     res.json(tokens);
-  } catch (err) {
+  } catch {
     res.status(401).json({ error: 'Token invalide' });
   }
 });
 
-// POST /api/auth/logout
+// ─── POST /api/auth/logout ────────────────────────────────────────────────────
 router.post('/logout', auth, async (req, res) => {
   const { refresh } = req.body;
   if (refresh) await db.query('DELETE FROM refresh_tokens WHERE token = ?', [refresh]);
   res.json({ message: 'Déconnecté' });
 });
 
-// GET /api/auth/me
+// ─── GET /api/auth/me ─────────────────────────────────────────────────────────
 router.get('/me', auth, (req, res) => {
   res.json({ user: req.user });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN — Gestion des utilisateurs (role: admin uniquement)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/auth/admin/users — liste tous les utilisateurs
+router.get('/admin/users', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const [users] = await db.query(
+      'SELECT id, email, username, role, is_active, avatar_url, created_at, last_login FROM users ORDER BY created_at DESC'
+    );
+    res.json(users);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// POST /api/auth/admin/users — créer un utilisateur
+router.post('/admin/users', auth, requireRole('admin'), [
+  body('email').isEmail().normalizeEmail(),
+  body('username').trim().isLength({ min: 2, max: 50 }),
+  body('password').isLength({ min: 8 }),
+  body('role').isIn(['visiteur', 'user', 'admin']),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+  const { email, username, password, role } = req.body;
+  try {
+    const [existing] = await db.query('SELECT id FROM users WHERE email = ?', [email]);
+    if (existing.length) return res.status(409).json({ error: 'Email déjà utilisé' });
+
+    const hash = await bcrypt.hash(password, 12);
+    const [result] = await db.query(
+      'INSERT INTO users (email, username, password_hash, role, is_active) VALUES (?, ?, ?, ?, 1)',
+      [email, username, hash, role]
+    );
+    res.status(201).json({ id: result.insertId, email, username, role, is_active: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// PUT /api/auth/admin/users/:id — modifier rôle / statut
+router.put('/admin/users/:id', auth, requireRole('admin'), async (req, res) => {
+  const { role, is_active } = req.body;
+  const { id } = req.params;
+
+  // Empêcher de se rétrograder soi-même
+  if (parseInt(id) === req.user.id && role && role !== 'admin')
+    return res.status(400).json({ error: 'Impossible de modifier votre propre rôle' });
+
+  try {
+    const updates = []; const params = [];
+    if (role !== undefined && ['visiteur','user','admin'].includes(role)) {
+      updates.push('role = ?'); params.push(role);
+    }
+    if (is_active !== undefined) {
+      updates.push('is_active = ?'); params.push(is_active ? 1 : 0);
+    }
+    if (!updates.length) return res.status(400).json({ error: 'Rien à modifier' });
+
+    params.push(id);
+    await db.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
+    const [rows] = await db.query(
+      'SELECT id, email, username, role, is_active, created_at, last_login FROM users WHERE id = ?', [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Utilisateur introuvable' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// DELETE /api/auth/admin/users/:id — désactiver (soft delete)
+router.delete('/admin/users/:id', auth, requireRole('admin'), async (req, res) => {
+  if (parseInt(req.params.id) === req.user.id)
+    return res.status(400).json({ error: 'Impossible de supprimer votre propre compte' });
+  try {
+    await db.query('UPDATE users SET is_active = 0 WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Utilisateur désactivé' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
 });
 
 module.exports = router;

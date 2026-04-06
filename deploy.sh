@@ -8,13 +8,7 @@
 set -euo pipefail
 
 # ─── Couleurs ─────────────────────────────────────────────────────────────────
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m'
-
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; BOLD='\033[1m'; NC='\033[0m'
 info()    { echo -e "${BLUE}[INFO]${NC} $*"; }
 success() { echo -e "${GREEN}[OK]${NC}   $*"; }
 warn()    { echo -e "${YELLOW}[WARN]${NC} $*"; }
@@ -24,21 +18,31 @@ section() { echo -e "\n${BOLD}${BLUE}══════════════�
 # ─── Vérifications initiales ──────────────────────────────────────────────────
 [[ $EUID -ne 0 ]] && error "Ce script doit être exécuté en root : sudo bash deploy.sh"
 [[ -f /etc/debian_version ]] || error "Ce script est prévu pour Debian uniquement."
-
-DEBIAN_VERSION=$(cat /etc/debian_version | cut -d. -f1)
+DEBIAN_VERSION=$(cut -d. -f1 /etc/debian_version)
 [[ "$DEBIAN_VERSION" -ge 13 ]] || warn "Recommandé sur Debian 13+. Version détectée : $(cat /etc/debian_version)"
 
-# ─── Répertoire du script (pour copier les fichiers du projet) ────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ─── Configuration interactive ───────────────────────────────────────────────
 section "Configuration"
 
-read -rp "Domaine principal (ex: cavevigne.fr) : " DOMAIN
+read -rp  "Domaine principal (ex: cavevigne.fr) : " DOMAIN
 [[ -z "$DOMAIN" ]] && error "Le domaine est obligatoire."
 
-read -rp "Email Let's Encrypt : " SSL_EMAIL
-[[ -z "$SSL_EMAIL" ]] && error "L'email SSL est obligatoire."
+echo ""
+echo "  [1] HTTPS port 443 + SSL Let's Encrypt (production, domaine public)"
+echo "  [2] HTTP port 80 uniquement (derrière HAProxy/reverse-proxy externe)"
+echo ""
+read -rp "Mode d'exposition [1/2] : " PORT_MODE
+[[ "$PORT_MODE" != "1" && "$PORT_MODE" != "2" ]] && PORT_MODE=1
+
+USE_SSL=false
+SSL_EMAIL=""
+if [[ "$PORT_MODE" == "1" ]]; then
+  USE_SSL=true
+  read -rp "Email Let's Encrypt : " SSL_EMAIL
+  [[ -z "$SSL_EMAIL" ]] && error "L'email SSL est obligatoire pour le mode HTTPS."
+fi
 
 read -rsp "Mot de passe MariaDB (cave_user) : " DB_PASSWORD; echo
 [[ ${#DB_PASSWORD} -lt 12 ]] && error "Mot de passe trop court (min 12 chars)."
@@ -47,18 +51,24 @@ read -rsp "Mot de passe Redis : " REDIS_PASSWORD; echo
 [[ -z "$REDIS_PASSWORD" ]] && error "Mot de passe Redis obligatoire."
 
 read -rsp "Clé API Anthropic (sk-ant-...) : " ANTHROPIC_API_KEY; echo
-[[ -z "$ANTHROPIC_API_KEY" ]] && warn "Clé Anthropic vide — le sommelier et le scan ne fonctionneront pas."
-
-# JWT secret auto-généré si openssl disponible
-JWT_SECRET=$(openssl rand -hex 64 2>/dev/null || tr -dc 'A-Za-z0-9!@#$%^&*' </dev/urandom | head -c 64)
-
-APP_DIR="/var/www/cave-vigne"
-DEPLOY_USER="${SUDO_USER:-www-data}"
+[[ -z "$ANTHROPIC_API_KEY" ]] && warn "Clé Anthropic vide — sommelier et scan désactivés."
 
 echo ""
-info "Domaine      : $DOMAIN"
-info "App dir      : $APP_DIR"
-info "Deploy user  : $DEPLOY_USER"
+echo -e "${BOLD}Compte administrateur initial${NC}"
+read -rp  "Email admin : "    ADMIN_EMAIL
+read -rp  "Username admin : " ADMIN_USERNAME
+read -rsp "Mot de passe admin (min 8 chars) : " ADMIN_PASSWORD; echo
+[[ ${#ADMIN_PASSWORD} -lt 8 ]] && error "Mot de passe admin trop court."
+
+JWT_SECRET=$(openssl rand -hex 64 2>/dev/null || tr -dc 'A-Za-z0-9' </dev/urandom | head -c 128)
+APP_DIR="/var/www/cave-vigne"
+DEPLOY_USER="${SUDO_USER:-www-data}"
+PROTO=$( [[ "$USE_SSL" == "true" ]] && echo "https" || echo "http" )
+
+echo ""
+info "Domaine   : $DOMAIN"
+info "Mode      : $( [[ "$USE_SSL" == "true" ]] && echo "HTTPS/443 + Certbot" || echo "HTTP/80 (no SSL)" )"
+info "App dir   : $APP_DIR"
 echo ""
 read -rp "Confirmer et démarrer le déploiement ? [o/N] " CONFIRM
 [[ "$CONFIRM" =~ ^[oO]$ ]] || { info "Annulé."; exit 0; }
@@ -69,11 +79,11 @@ apt-get update -qq
 apt-get upgrade -y -qq
 apt-get install -y -qq \
   curl wget gnupg2 ca-certificates lsb-release apt-transport-https \
-  software-properties-common ufw git unzip libvips-dev
+  ufw git unzip libvips-dev
 success "Système à jour"
 
-# ─── 2. Node.js 20 LTS ───────────────────────────────────────────────────────
-section "2/9 — Node.js 20 LTS"
+# ─── 2. Node.js 20 LTS + npm 11.12.1 ─────────────────────────────────────────
+section "2/9 — Node.js 20 LTS + npm 11.12.1"
 if ! command -v node &>/dev/null || [[ "$(node -v | cut -d. -f1 | tr -d 'v')" -lt 20 ]]; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
@@ -82,14 +92,15 @@ else
   success "Node.js $(node -v) déjà présent"
 fi
 
+npm install -g npm@11.12.1 --quiet
 npm install -g pm2 --quiet
-success "PM2 $(pm2 -v) installé"
+success "npm $(npm -v) + PM2 $(pm2 -v) installés"
 
-# ─── 3. MariaDB 11 ───────────────────────────────────────────────────────────
-section "3/9 — MariaDB 11"
+# ─── 3. MariaDB ───────────────────────────────────────────────────────────────
+section "3/9 — MariaDB"
 if ! command -v mysql &>/dev/null; then
-  curl -fsSL https://downloads.mariadb.com/MariaDB/mariadb_repo_setup \
-    | bash -s -- --mariadb-server-version="mariadb-11.4"
+  curl -fsSL https://dlm.mariadb.com/3/MariaDB/mariadb_repo_setup \
+    | bash -s -- --mariadb-server-version="mariadb-12.2"
   apt-get update -qq
   apt-get install -y mariadb-server mariadb-client
   systemctl enable --now mariadb
@@ -98,11 +109,10 @@ else
   success "MariaDB déjà présent"
 fi
 
-# Sécurisation + création base/user
 mysql -u root <<SQL
-ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('');
+ALTER USER IF EXISTS 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('');
 DELETE FROM mysql.user WHERE User='';
-DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost','127.0.0.1','::1');
 DROP DATABASE IF EXISTS test;
 DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
 CREATE DATABASE IF NOT EXISTS cave_vigne CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -111,7 +121,6 @@ GRANT ALL PRIVILEGES ON cave_vigne.* TO 'cave_user'@'localhost';
 FLUSH PRIVILEGES;
 SQL
 
-# Tuning MariaDB
 cat > /etc/mysql/mariadb.conf.d/99-cave-vigne.cnf <<CONF
 [mysqld]
 character-set-server  = utf8mb4
@@ -133,18 +142,14 @@ if ! command -v redis-server &>/dev/null; then
 else
   success "Redis déjà présent"
 fi
-
 REDIS_CONF="/etc/redis/redis.conf"
 sed -i "s/^# requirepass .*/requirepass ${REDIS_PASSWORD}/" "$REDIS_CONF"
-sed -i "s/^requirepass .*/requirepass ${REDIS_PASSWORD}/" "$REDIS_CONF"
-# Ajoute si absent
+sed -i "s/^requirepass .*/requirepass ${REDIS_PASSWORD}/"   "$REDIS_CONF"
 grep -q "^requirepass" "$REDIS_CONF" || echo "requirepass ${REDIS_PASSWORD}" >> "$REDIS_CONF"
 sed -i "s/^bind .*/bind 127.0.0.1/" "$REDIS_CONF"
-grep -q "^maxmemory " "$REDIS_CONF" || echo "maxmemory 128mb" >> "$REDIS_CONF"
+grep -q "^maxmemory "      "$REDIS_CONF" || echo "maxmemory 128mb"          >> "$REDIS_CONF"
 grep -q "^maxmemory-policy" "$REDIS_CONF" || echo "maxmemory-policy allkeys-lru" >> "$REDIS_CONF"
-
-systemctl enable --now redis-server
-systemctl restart redis-server
+systemctl enable --now redis-server && systemctl restart redis-server
 success "Redis configuré (bind 127.0.0.1, mot de passe actif)"
 
 # ─── 5. Nginx ─────────────────────────────────────────────────────────────────
@@ -156,63 +161,37 @@ else
   success "Nginx déjà présent"
 fi
 
-# Certbot
-if ! command -v certbot &>/dev/null; then
+if [[ "$USE_SSL" == "true" ]] && ! command -v certbot &>/dev/null; then
   apt-get install -y certbot python3-certbot-nginx
   success "Certbot installé"
 fi
 
-# Répertoire cache nginx
 mkdir -p /var/cache/nginx/cavevigne
 chown www-data:www-data /var/cache/nginx/cavevigne
 
-# Config nginx depuis le projet (si présente), sinon depuis template
-NGINX_CONF_SRC="${SCRIPT_DIR}/nginx/cavevigne.fr.conf"
 NGINX_CONF_DEST="/etc/nginx/sites-available/${DOMAIN}"
 
-if [[ -f "$NGINX_CONF_SRC" ]]; then
-  cp "$NGINX_CONF_SRC" "$NGINX_CONF_DEST"
-  # Remplace le domaine si différent de cavevigne.fr
-  sed -i "s/cavevigne\.fr/${DOMAIN}/g" "$NGINX_CONF_DEST"
-  success "Config Nginx copiée depuis le projet"
-else
-  warn "Fichier nginx/${DOMAIN}.conf introuvable — génération d'un template minimal"
-  cat > "$NGINX_CONF_DEST" <<NGINXCONF
+# ── Config HTTP/80 seul ──
+gen_nginx_http() {
+cat > "$NGINX_CONF_DEST" <<NGINXCONF
 limit_req_zone \$binary_remote_addr zone=api:10m rate=30r/m;
 limit_req_zone \$binary_remote_addr zone=auth:10m rate=10r/m;
-
-proxy_cache_path /var/cache/nginx/cavevigne levels=1:2 keys_zone=cv_cache:10m max_size=1g inactive=60m use_temp_path=off;
 
 upstream cv_api { server 127.0.0.1:3001; keepalive 64; }
 
 server {
     listen 80;
+    listen [::]:80;
     server_name ${DOMAIN} www.${DOMAIN};
-    location /.well-known/acme-challenge/ { root /var/www/letsencrypt; }
-    location / { return 301 https://\$host\$request_uri; }
-}
-
-server {
-    listen 443 ssl http2;
-    server_name ${DOMAIN} www.${DOMAIN};
-
-    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers off;
-    ssl_session_cache shared:SSL:10m;
-    ssl_stapling on;
-    ssl_stapling_verify on;
-
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
 
     root ${APP_DIR}/frontend/build;
     index index.html;
 
     gzip on; gzip_vary on; gzip_comp_level 6;
     gzip_types text/plain text/css application/json application/javascript text/xml image/svg+xml;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
 
     location /api/ {
         limit_req zone=api burst=60 nodelay;
@@ -225,17 +204,12 @@ server {
         add_header Cache-Control "no-store" always;
     }
 
-    location /api/auth/login {
-        limit_req zone=auth burst=5 nodelay;
-        proxy_pass http://cv_api;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
+    location /api/auth/login    { limit_req zone=auth burst=5 nodelay; proxy_pass http://cv_api; proxy_set_header Host \$host; }
+    location /api/auth/register { limit_req zone=auth burst=5 nodelay; proxy_pass http://cv_api; proxy_set_header Host \$host; }
 
     location /uploads/ {
         alias ${APP_DIR}/uploads/;
-        expires 7d;
-        add_header Cache-Control "public, immutable";
+        expires 7d; add_header Cache-Control "public, immutable";
         location ~* \.(php|sh|cgi)$ { deny all; }
     }
 
@@ -243,11 +217,79 @@ server {
         expires 1y; add_header Cache-Control "public, immutable"; access_log off; try_files \$uri =404;
     }
 
-    location / {
-        try_files \$uri \$uri/ /index.html;
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-    }
+    location / { try_files \$uri \$uri/ /index.html; add_header Cache-Control "no-cache, no-store, must-revalidate"; }
+    location /health { access_log off; return 200 "ok\n"; add_header Content-Type text/plain; }
+    location ~ /\. { deny all; }
 
+    error_log  /var/log/nginx/${DOMAIN}_error.log warn;
+    access_log /var/log/nginx/${DOMAIN}_access.log combined;
+}
+NGINXCONF
+}
+
+# ── Config HTTPS/443 ──
+gen_nginx_https() {
+# Copie depuis le projet si disponible
+local SRC="${SCRIPT_DIR}/nginx/cavevigne.fr.conf"
+if [[ -f "$SRC" ]]; then
+  cp "$SRC" "$NGINX_CONF_DEST"
+  sed -i "s/cavevigne\.fr/${DOMAIN}/g" "$NGINX_CONF_DEST"
+  sed -i "s|/var/www/cave-vigne|${APP_DIR}|g" "$NGINX_CONF_DEST"
+  success "Config Nginx copiée depuis le projet"
+else
+cat > "$NGINX_CONF_DEST" <<NGINXCONF
+limit_req_zone \$binary_remote_addr zone=api:10m rate=30r/m;
+limit_req_zone \$binary_remote_addr zone=auth:10m rate=10r/m;
+proxy_cache_path /var/cache/nginx/cavevigne levels=1:2 keys_zone=cv_cache:10m max_size=1g inactive=60m use_temp_path=off;
+upstream cv_api { server 127.0.0.1:3001; keepalive 64; }
+
+server {
+    listen 80; listen [::]:80;
+    server_name ${DOMAIN} www.${DOMAIN};
+    location /.well-known/acme-challenge/ { root /var/www/letsencrypt; }
+    location / { return 301 https://\$host\$request_uri; }
+}
+
+server {
+    listen 443 ssl http2; listen [::]:443 ssl http2;
+    server_name ${DOMAIN} www.${DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_stapling on; ssl_stapling_verify on;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+
+    root ${APP_DIR}/frontend/build; index index.html;
+    gzip on; gzip_vary on; gzip_comp_level 6;
+    gzip_types text/plain text/css application/json application/javascript text/xml image/svg+xml;
+
+    location /api/ {
+        limit_req zone=api burst=60 nodelay;
+        proxy_pass http://cv_api; proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        add_header Cache-Control "no-store" always;
+    }
+    location /api/auth/login    { limit_req zone=auth burst=5 nodelay; proxy_pass http://cv_api; proxy_set_header Host \$host; }
+    location /api/auth/register { limit_req zone=auth burst=5 nodelay; proxy_pass http://cv_api; proxy_set_header Host \$host; }
+
+    location /uploads/ {
+        alias ${APP_DIR}/uploads/;
+        expires 7d; add_header Cache-Control "public, immutable";
+        location ~* \.(php|sh|cgi)$ { deny all; }
+    }
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|webp)$ {
+        expires 1y; add_header Cache-Control "public, immutable"; access_log off; try_files \$uri =404;
+    }
+    location / { try_files \$uri \$uri/ /index.html; add_header Cache-Control "no-cache"; }
     location /health { access_log off; return 200 "ok\n"; add_header Content-Type text/plain; }
     location ~ /\. { deny all; }
 
@@ -256,36 +298,35 @@ server {
 }
 NGINXCONF
 fi
+}
+
+if [[ "$USE_SSL" == "true" ]]; then
+  gen_nginx_https
+else
+  gen_nginx_http
+fi
 
 ln -sf "$NGINX_CONF_DEST" "/etc/nginx/sites-enabled/${DOMAIN}"
 rm -f /etc/nginx/sites-enabled/default
-
-# Validation config (sans SSL pour l'instant)
-nginx -t 2>/dev/null || warn "Config Nginx invalide — vérifier après obtention du certificat SSL"
-success "Nginx configuré"
+nginx -t 2>/dev/null && systemctl reload nginx || warn "Config Nginx à vérifier"
+success "Nginx configuré (mode: $( [[ "$USE_SSL" == "true" ]] && echo "HTTPS" || echo "HTTP" ))"
 
 # ─── 6. Déploiement application ───────────────────────────────────────────────
 section "6/9 — Déploiement application"
-
-# Répertoires
 mkdir -p "${APP_DIR}"/{backend,frontend/build,uploads}
 chown -R "${DEPLOY_USER}:www-data" "${APP_DIR}"
 chmod -R 755 "${APP_DIR}"
 chmod 775 "${APP_DIR}/uploads"
 
-# Backend
-if [[ -d "${SCRIPT_DIR}/backend" ]]; then
-  cp -r "${SCRIPT_DIR}/backend/." "${APP_DIR}/backend/"
-  success "Backend copié"
-else
-  error "Dossier backend/ introuvable dans ${SCRIPT_DIR}"
-fi
+[[ -d "${SCRIPT_DIR}/backend" ]]  || error "Dossier backend/ introuvable dans ${SCRIPT_DIR}"
+[[ -d "${SCRIPT_DIR}/frontend" ]] || error "Dossier frontend/ introuvable dans ${SCRIPT_DIR}"
+cp -r "${SCRIPT_DIR}/backend/." "${APP_DIR}/backend/"
+success "Backend copié"
 
-# Fichier .env backend
 cat > "${APP_DIR}/backend/.env" <<ENV
 NODE_ENV=production
 PORT=3001
-API_URL=https://${DOMAIN}
+API_URL=${PROTO}://${DOMAIN}
 
 DB_HOST=localhost
 DB_PORT=3306
@@ -306,77 +347,66 @@ ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 UPLOAD_DIR=./uploads
 MAX_FILE_SIZE=10485760
 
-ALLOWED_ORIGINS=https://${DOMAIN}
+ALLOWED_ORIGINS=${PROTO}://${DOMAIN}
 ENV
 chmod 600 "${APP_DIR}/backend/.env"
 success ".env backend généré"
 
-# Dépendances backend
 cd "${APP_DIR}/backend"
 npm install --omit=dev --quiet
 npm run migrate
 success "Dépendances backend installées + migration DB"
 
-# Frontend build
-if [[ -d "${SCRIPT_DIR}/frontend" ]]; then
-  cd "${SCRIPT_DIR}/frontend"
-  cat > .env.production <<FENV
-REACT_APP_API_URL=https://${DOMAIN}/api
+# Build frontend
+cd "${SCRIPT_DIR}/frontend"
+cat > .env.production <<FENV
+REACT_APP_API_URL=${PROTO}://${DOMAIN}/api
 FENV
-  npm install --quiet
-  npm run build
-  cp -r build/. "${APP_DIR}/frontend/build/"
-  success "Frontend buildé et copié"
-else
-  error "Dossier frontend/ introuvable dans ${SCRIPT_DIR}"
-fi
+npm install --quiet
+npm run build
+cp -r build/. "${APP_DIR}/frontend/build/"
+success "Frontend buildé et copié"
 
 # ─── 7. PM2 ───────────────────────────────────────────────────────────────────
 section "7/9 — PM2"
 pm2 delete cave-vigne-api 2>/dev/null || true
 
 if [[ -f "${APP_DIR}/backend/ecosystem.config.js" ]]; then
-  cd "${APP_DIR}/backend"
-  pm2 start ecosystem.config.js --env production
+  cd "${APP_DIR}/backend" && pm2 start ecosystem.config.js --env production
 else
   pm2 start "${APP_DIR}/backend/src/server.js" \
-    --name cave-vigne-api \
-    --cwd "${APP_DIR}/backend" \
-    --max-memory-restart 250M \
-    -i max \
-    --env production
+    --name cave-vigne-api --cwd "${APP_DIR}/backend" \
+    --max-memory-restart 250M -i max --env production
 fi
-
 pm2 save
 
-# Startup systemd
-PM2_STARTUP=$(pm2 startup systemd -u root --hp /root | grep "sudo env" | tail -1)
-[[ -n "$PM2_STARTUP" ]] && eval "$PM2_STARTUP" || warn "Impossible de configurer pm2 startup automatiquement — exécute manuellement : pm2 startup"
-
+PM2_STARTUP=$(pm2 startup systemd -u root --hp /root 2>/dev/null | grep "sudo env" | tail -1 || true)
+[[ -n "$PM2_STARTUP" ]] && eval "$PM2_STARTUP" || warn "Exécute manuellement : pm2 startup"
 success "PM2 configuré (cluster mode)"
 
-# ─── 8. SSL Let's Encrypt ────────────────────────────────────────────────────
-section "8/9 — SSL Let's Encrypt"
-
-mkdir -p /var/www/letsencrypt
-systemctl reload nginx
-
-# Tentative d'obtention du certificat
-if certbot certonly --webroot \
-  -w /var/www/letsencrypt \
-  -d "${DOMAIN}" -d "www.${DOMAIN}" \
-  --email "${SSL_EMAIL}" \
-  --agree-tos --non-interactive 2>/dev/null; then
-  success "Certificat SSL obtenu pour ${DOMAIN}"
+# ─── 8. SSL Let's Encrypt (mode HTTPS uniquement) ────────────────────────────
+if [[ "$USE_SSL" == "true" ]]; then
+  section "8/9 — SSL Let's Encrypt"
+  mkdir -p /var/www/letsencrypt
   systemctl reload nginx
-else
-  warn "Certbot a échoué — Le DNS pointe-t-il sur ce serveur ?"
-  warn "Lance manuellement après : certbot --nginx -d ${DOMAIN} -d www.${DOMAIN} --email ${SSL_EMAIL} --agree-tos"
-fi
 
-# Renouvellement automatique
-(crontab -l 2>/dev/null | grep -v certbot; echo "0 3 * * * /usr/bin/certbot renew --quiet --deploy-hook 'systemctl reload nginx'") | crontab -
-success "Renouvellement SSL automatique (cron 3h)"
+  if certbot certonly --webroot \
+    -w /var/www/letsencrypt \
+    -d "${DOMAIN}" -d "www.${DOMAIN}" \
+    --email "${SSL_EMAIL}" --agree-tos --non-interactive 2>/dev/null; then
+    success "Certificat SSL obtenu pour ${DOMAIN}"
+    systemctl reload nginx
+  else
+    warn "Certbot a échoué — DNS configuré ? Lance après : certbot --nginx -d ${DOMAIN} --email ${SSL_EMAIL} --agree-tos"
+  fi
+
+  (crontab -l 2>/dev/null | grep -v certbot; \
+    echo "0 3 * * * /usr/bin/certbot renew --quiet --deploy-hook 'systemctl reload nginx'") | crontab -
+  success "Renouvellement SSL automatique (cron 3h)"
+else
+  section "8/9 — SSL ignoré (mode HTTP)"
+  info "Mode HTTP/80 — Certbot non installé. Configure le SSL sur ton HAProxy/reverse-proxy externe."
+fi
 
 # ─── 9. Firewall UFW ─────────────────────────────────────────────────────────
 section "9/9 — Firewall UFW"
@@ -384,12 +414,13 @@ ufw --force reset >/dev/null
 ufw default deny incoming >/dev/null
 ufw default allow outgoing >/dev/null
 ufw allow ssh >/dev/null
-ufw allow 'Nginx Full' >/dev/null
-ufw deny 3306 >/dev/null   # MariaDB — local uniquement
-ufw deny 6379 >/dev/null   # Redis — local uniquement
-ufw deny 3001 >/dev/null   # API Node — via Nginx uniquement
+ufw allow 80/tcp >/dev/null
+[[ "$USE_SSL" == "true" ]] && ufw allow 443/tcp >/dev/null
+ufw deny 3306 >/dev/null
+ufw deny 6379 >/dev/null
+ufw deny 3001 >/dev/null
 ufw --force enable >/dev/null
-success "UFW configuré (SSH + HTTPS ouverts, DB/Redis/API bloqués depuis l'extérieur)"
+success "UFW configuré"
 
 # ─── Backup automatique MariaDB ───────────────────────────────────────────────
 mkdir -p /var/backups/cave-vigne
@@ -397,16 +428,24 @@ mkdir -p /var/backups/cave-vigne
   echo "0 3 * * * mysqldump -u cave_user -p'${DB_PASSWORD}' cave_vigne | gzip > /var/backups/cave-vigne/cave_\$(date +\%Y\%m\%d).sql.gz && find /var/backups/cave-vigne -mtime +30 -delete") | crontab -
 success "Backup MariaDB quotidien (3h, rétention 30j)"
 
+# ─── Création du premier administrateur ──────────────────────────────────────
+section "Création du compte administrateur"
+cd "${APP_DIR}/backend"
+ADMIN_EMAIL="${ADMIN_EMAIL}" ADMIN_USERNAME="${ADMIN_USERNAME}" ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
+  node src/config/seed.js "${ADMIN_EMAIL}" "${ADMIN_USERNAME}" "${ADMIN_PASSWORD}" || \
+  warn "Seed échoué — exécute manuellement : cd ${APP_DIR}/backend && npm run seed <email> <username> <password>"
+
 # ─── Résumé final ─────────────────────────────────────────────────────────────
-section "Déploiement terminé"
+section "Déploiement terminé ✓"
 echo ""
-echo -e "  ${GREEN}Application${NC}  : https://${DOMAIN}"
-echo -e "  ${GREEN}API health${NC}   : https://${DOMAIN}/health"
+echo -e "  ${GREEN}Application${NC}  : ${PROTO}://${DOMAIN}"
+echo -e "  ${GREEN}API health${NC}   : ${PROTO}://${DOMAIN}/api/health"
+echo -e "  ${GREEN}Admin UI${NC}     : ${PROTO}://${DOMAIN}/admin  (connecte-toi avec ${ADMIN_EMAIL})"
 echo -e "  ${GREEN}Logs PM2${NC}     : pm2 logs cave-vigne-api"
 echo -e "  ${GREEN}Logs Nginx${NC}   : tail -f /var/log/nginx/${DOMAIN}_error.log"
 echo -e "  ${GREEN}Backups DB${NC}   : /var/backups/cave-vigne/"
 echo ""
-echo -e "  ${YELLOW}JWT_SECRET${NC}   : ${JWT_SECRET}"
-echo -e "  ${YELLOW}(sauvegarde cette valeur en lieu sûr)${NC}"
+echo -e "  ${YELLOW}JWT_SECRET${NC} (à sauvegarder) :"
+echo -e "  ${JWT_SECRET}"
 echo ""
 pm2 status
