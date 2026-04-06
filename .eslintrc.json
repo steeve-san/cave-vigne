@@ -1,0 +1,31 @@
+{
+  "root": true,
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2022": true
+  },
+  "extends": ["eslint:recommended"],
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    "no-console": ["warn", { "allow": ["warn", "error", "log"] }],
+    "prefer-const": "warn",
+    "no-var": "error"
+  },
+  "overrides": [
+    {
+      "files": ["frontend/src/**/*.{js,jsx}"],
+      "extends": ["eslint:recommended", "plugin:react/recommended", "plugin:react-hooks/recommended"],
+      "plugins": ["react", "react-hooks"],
+      "rules": {
+        "react/prop-types": "off",
+        "react/react-in-jsx-scope": "off"
+      },
+      "settings": { "react": { "version": "detect" } }
+    }
+  ]
+}

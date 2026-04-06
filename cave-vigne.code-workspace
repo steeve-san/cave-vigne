@@ -1,0 +1,132 @@
+{
+  "folders": [
+    { "name": "🍷 Cave & Vigne", "path": "." },
+    { "name": "📦 Backend (Node.js)", "path": "./backend" },
+    { "name": "⚛️  Frontend (React)", "path": "./frontend" },
+    { "name": "📱 Android (Kotlin)", "path": "./android" }
+  ],
+  "settings": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.wordWrap": "on",
+    "editor.minimap.enabled": false,
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    "files.eol": "\n",
+    "files.encoding": "utf8",
+    "terminal.integrated.defaultProfile.windows": "Git Bash",
+    "workbench.colorTheme": "GitHub Dark Default",
+    "workbench.iconTheme": "material-icon-theme",
+    "explorer.sortOrder": "type",
+
+    "[javascript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "[javascriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "[css]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+
+    "emmet.includeLanguages": { "javascript": "javascriptreact" },
+    "eslint.workingDirectories": ["./backend", "./frontend"],
+
+    "prettier.singleQuote": true,
+    "prettier.semi": true,
+    "prettier.trailingComma": "es5",
+    "prettier.printWidth": 100,
+
+    "git.autofetch": true,
+    "git.confirmSync": false
+  },
+  "extensions": {
+    "recommendations": [
+      "dbaeumer.vscode-eslint",
+      "esbenp.prettier-vscode",
+      "formulahendry.auto-rename-tag",
+      "christian-kohler.path-intellisense",
+      "PKief.material-icon-theme",
+      "GitHub.github-vscode-theme",
+      "humao.rest-client",
+      "ms-vscode-remote.remote-wsl",
+      "streetsidesoftware.code-spell-checker",
+      "streetsidesoftware.code-spell-checker-french",
+      "bradlc.vscode-tailwindcss",
+      "ms-azuretools.vscode-docker",
+      "eamodio.gitlens",
+      "mhutchie.git-graph",
+      "aaron-bond.better-comments",
+      "oderwat.indent-rainbow",
+      "naumovs.color-highlight",
+      "zignd.html-css-class-completion",
+      "fwcd.kotlin"
+    ]
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "🚀 Démarrer tout",
+        "dependsOn": ["▶ Backend dev", "▶ Frontend dev"],
+        "group": { "kind": "build", "isDefault": true },
+        "problemMatcher": []
+      },
+      {
+        "label": "▶ Backend dev",
+        "type": "shell",
+        "command": "npm run dev",
+        "options": { "cwd": "${workspaceFolder}/backend" },
+        "isBackground": true,
+        "problemMatcher": {
+          "owner": "node",
+          "pattern": { "regexp": "." },
+          "background": { "activeOnStart": true, "beginsPattern": ".", "endsPattern": "Cave & Vigne" }
+        },
+        "presentation": { "panel": "dedicated", "group": "servers", "reveal": "always" }
+      },
+      {
+        "label": "▶ Frontend dev",
+        "type": "shell",
+        "command": "npm start",
+        "options": { "cwd": "${workspaceFolder}/frontend" },
+        "isBackground": true,
+        "problemMatcher": {
+          "owner": "react",
+          "pattern": { "regexp": "." },
+          "background": { "activeOnStart": true, "beginsPattern": ".", "endsPattern": "Compiled" }
+        },
+        "presentation": { "panel": "dedicated", "group": "servers", "reveal": "always" }
+      },
+      {
+        "label": "🗃️  Migration BDD",
+        "type": "shell",
+        "command": "node src/config/migrate.js",
+        "options": { "cwd": "${workspaceFolder}/backend" },
+        "presentation": { "reveal": "always", "panel": "shared" },
+        "problemMatcher": []
+      },
+      {
+        "label": "📦 Build frontend",
+        "type": "shell",
+        "command": "npm run build",
+        "options": { "cwd": "${workspaceFolder}/frontend" },
+        "presentation": { "reveal": "always" },
+        "problemMatcher": []
+      }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "🐛 Debug Backend",
+        "type": "node",
+        "request": "launch",
+        "program": "${workspaceFolder}/backend/src/server.js",
+        "cwd": "${workspaceFolder}/backend",
+        "envFile": "${workspaceFolder}/backend/.env",
+        "restart": true,
+        "console": "integratedTerminal",
+        "runtimeExecutable": "node",
+        "skipFiles": ["<node_internals>/**"]
+      }
+    ]
+  }
+}

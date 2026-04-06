@@ -1,0 +1,180 @@
+/* src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap');
+@import 'bootstrap/dist/css/bootstrap.min.css';
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+
+:root {
+  --cv-wine: #8B1A1A;
+  --cv-wine-dark: #5C0E0E;
+  --cv-wine-light: #C04040;
+  --cv-gold: #C9A84C;
+  --cv-gold-light: #E8C97A;
+  --cv-bg: #0f0808;
+  --cv-bg2: #1a0f0f;
+  --cv-bg3: #231515;
+  --cv-bg4: #2c1a1a;
+  --cv-bg5: #3a2020;
+  --cv-text: #F0E6D3;
+  --cv-text2: #B09070;
+  --cv-text3: #7A5A4A;
+  --cv-border: rgba(201,168,76,0.2);
+  --cv-border2: rgba(201,168,76,0.4);
+
+  /* Override Bootstrap */
+  --bs-body-bg: var(--cv-bg2);
+  --bs-body-color: var(--cv-text);
+  --bs-border-color: var(--cv-border);
+  --bs-primary: var(--cv-wine);
+  --bs-primary-rgb: 139,26,26;
+  --bs-card-bg: var(--cv-bg3);
+  --bs-card-border-color: var(--cv-border);
+  --bs-modal-bg: var(--cv-bg3);
+  --bs-nav-link-color: var(--cv-text2);
+  --bs-nav-link-hover-color: var(--cv-gold);
+  --bs-dropdown-bg: var(--cv-bg4);
+  --bs-dropdown-border-color: var(--cv-border2);
+  --bs-dropdown-color: var(--cv-text);
+  --bs-dropdown-link-color: var(--cv-text);
+  --bs-dropdown-link-hover-bg: var(--cv-bg5);
+  --bs-dropdown-link-hover-color: var(--cv-gold);
+  --bs-input-bg: var(--cv-bg4);
+  --bs-input-border-color: var(--cv-border2);
+  --bs-input-color: var(--cv-text);
+  --bs-input-placeholder-color: var(--cv-text3);
+  --bs-input-focus-border-color: var(--cv-gold);
+  --bs-input-focus-box-shadow: 0 0 0 0.2rem rgba(201,168,76,0.2);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { background: var(--cv-bg2); color: var(--cv-text); font-family: 'Inter', sans-serif; font-size: 14px; }
+.font-serif { font-family: 'Cormorant Garamond', serif; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--cv-bg3); }
+::-webkit-scrollbar-thumb { background: var(--cv-border2); border-radius: 3px; }
+
+/* Cards */
+.card { background: var(--cv-bg3); border: 0.5px solid var(--cv-border); border-radius: 12px; }
+.card-header { background: transparent; border-bottom: 0.5px solid var(--cv-border); padding: 1rem 1.25rem 0.75rem; }
+.card-title { font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; color: var(--cv-gold); font-style: italic; margin-bottom: 0; }
+
+/* Sidebar */
+.sidebar { width: 220px; min-height: 100vh; background: var(--cv-bg3); border-right: 0.5px solid var(--cv-border); flex-shrink: 0; display: flex; flex-direction: column; position: sticky; top: 0; }
+.sidebar-logo { padding: 1.5rem 1.25rem 1rem; border-bottom: 0.5px solid var(--cv-border); }
+.sidebar-logo h1 { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--cv-gold); letter-spacing: 2px; line-height: 1.2; }
+.sidebar-logo p { font-size: 0.65rem; letter-spacing: 3px; color: var(--cv-text3); text-transform: uppercase; margin: 0; }
+.sidebar .nav-section { padding: 1rem 1.25rem 0.25rem; font-size: 0.6rem; letter-spacing: 3px; color: var(--cv-text3); text-transform: uppercase; font-weight: 600; }
+.sidebar .nav-link { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 1.25rem; color: var(--cv-text2); font-size: 0.85rem; border-left: 2px solid transparent; border-radius: 0; transition: all 0.15s; }
+.sidebar .nav-link:hover { color: var(--cv-text); background: rgba(201,168,76,0.06); }
+.sidebar .nav-link.active { color: var(--cv-gold); border-left-color: var(--cv-gold); background: rgba(201,168,76,0.1); }
+.sidebar .nav-link .bi { font-size: 0.9rem; width: 16px; }
+
+/* Topbar */
+.topbar { height: 56px; background: var(--cv-bg3); border-bottom: 0.5px solid var(--cv-border); display: flex; align-items: center; padding: 0 1.5rem; gap: 1rem; position: sticky; top: 0; z-index: 100; }
+.topbar-title { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; font-style: italic; color: var(--cv-text); flex: 1; }
+
+/* Buttons */
+.btn-wine { background: var(--cv-wine); color: #fff; border: none; }
+.btn-wine:hover { background: var(--cv-wine-light); color: #fff; }
+.btn-gold { background: var(--cv-gold); color: #1a0f0f; border: none; font-weight: 600; }
+.btn-gold:hover { background: var(--cv-gold-light); color: #1a0f0f; }
+.btn-outline-gold { background: transparent; color: var(--cv-gold); border: 1px solid var(--cv-gold); }
+.btn-outline-gold:hover { background: rgba(201,168,76,0.15); color: var(--cv-gold); }
+.btn { border-radius: 8px; font-size: 0.82rem; font-weight: 500; letter-spacing: 0.3px; }
+
+/* Form controls */
+.form-control, .form-select { background: var(--cv-bg4); border: 0.5px solid var(--cv-border2); color: var(--cv-text); border-radius: 8px; font-size: 0.85rem; }
+.form-control:focus, .form-select:focus { background: var(--cv-bg4); color: var(--cv-text); border-color: var(--cv-gold); box-shadow: 0 0 0 0.15rem rgba(201,168,76,0.2); }
+.form-control::placeholder { color: var(--cv-text3); }
+.form-label { font-size: 0.7rem; letter-spacing: 2px; text-transform: uppercase; color: var(--cv-text3); margin-bottom: 0.35rem; }
+.input-group-text { background: var(--cv-bg5); border-color: var(--cv-border2); color: var(--cv-text2); }
+.form-select option { background: var(--cv-bg4); color: var(--cv-text); }
+
+/* Badges */
+.badge-stock { background: rgba(76,175,80,0.2); color: #4CAF50; font-size: 0.7rem; padding: 2px 8px; border-radius: 8px; font-weight: 500; }
+.badge-drunk { background: rgba(122,90,74,0.3); color: var(--cv-text3); font-size: 0.7rem; padding: 2px 8px; border-radius: 8px; font-weight: 500; }
+.badge-open { background: rgba(201,168,76,0.15); color: var(--cv-gold); font-size: 0.7rem; padding: 2px 8px; border-radius: 8px; font-weight: 500; }
+.badge-type { font-size: 0.65rem; padding: 2px 7px; border-radius: 6px; font-weight: 500; }
+.badge-rouge { background: rgba(139,42,42,0.4); color: #E07070; }
+.badge-blanc { background: rgba(122,106,48,0.4); color: #D0C080; }
+.badge-rosé { background: rgba(139,74,90,0.4); color: #E090A8; }
+.badge-pétillant { background: rgba(42,90,139,0.4); color: #80B0E0; }
+.badge-whisky { background: rgba(139,94,42,0.4); color: #D09850; }
+.badge-rhum { background: rgba(154,58,16,0.4); color: #E08050; }
+.badge-cognac { background: rgba(154,80,32,0.4); color: #D09060; }
+
+/* Wine / Spirit cards list */
+.item-card { background: var(--cv-bg3); border: 0.5px solid var(--cv-border); border-radius: 10px; padding: 0.75rem 1rem; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 0.75rem; }
+.item-card:hover { border-color: var(--cv-border2); background: var(--cv-bg4); }
+.item-card .item-icon { font-size: 1.4rem; flex-shrink: 0; width: 32px; text-align: center; }
+.item-card .item-name { font-family: 'Cormorant Garamond', serif; font-size: 1rem; color: var(--cv-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-card .item-meta { font-size: 0.72rem; color: var(--cv-text2); margin-top: 1px; }
+.item-card .item-qty { font-size: 1.3rem; font-family: 'Cormorant Garamond', serif; color: var(--cv-gold); min-width: 28px; text-align: right; }
+
+/* Stats cards */
+.stat-card { background: var(--cv-bg3); border: 0.5px solid var(--cv-border); border-radius: 10px; padding: 1rem 1.25rem; }
+.stat-card .stat-num { font-size: 2rem; font-family: 'Cormorant Garamond', serif; font-weight: 600; color: var(--cv-gold); line-height: 1; }
+.stat-card .stat-label { font-size: 0.65rem; letter-spacing: 2px; color: var(--cv-text3); text-transform: uppercase; margin-top: 0.25rem; }
+
+/* Map tooltip */
+.map-tooltip { position: absolute; background: var(--cv-bg2); border: 0.5px solid var(--cv-border2); border-radius: 8px; padding: 8px 12px; font-size: 11px; pointer-events: none; opacity: 0; transition: opacity 0.12s; z-index: 20; max-width: 240px; }
+.map-tooltip.visible { opacity: 1; }
+.map-tooltip strong { display: block; font-family: 'Cormorant Garamond', serif; font-size: 13px; color: var(--cv-gold); margin-bottom: 3px; }
+
+/* Modals */
+.modal-content { background: var(--cv-bg3); border: 0.5px solid var(--cv-border2); border-radius: 14px; color: var(--cv-text); }
+.modal-header { border-bottom: 0.5px solid var(--cv-border); padding: 1.25rem 1.5rem 0.75rem; }
+.modal-title { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; color: var(--cv-gold); font-style: italic; }
+.modal-footer { border-top: 0.5px solid var(--cv-border); }
+.btn-close { filter: invert(1) sepia(1) saturate(3) hue-rotate(10deg); opacity: 0.6; }
+.btn-close:hover { opacity: 1; }
+
+/* Auth pages */
+.auth-page { min-height: 100vh; background: var(--cv-bg); display: flex; align-items: center; justify-content: center; }
+.auth-card { background: var(--cv-bg3); border: 0.5px solid var(--cv-border); border-radius: 16px; padding: 2.5rem; width: 100%; max-width: 420px; }
+.auth-logo { font-family: 'Cormorant Garamond', serif; font-size: 2.5rem; color: var(--cv-gold); letter-spacing: 3px; }
+
+/* Sommelier */
+.sommelier-query { background: var(--cv-bg4); border: 0.5px solid var(--cv-border2); border-radius: 10px; padding: 1rem; }
+.reco-card { background: var(--cv-bg4); border: 0.5px solid var(--cv-border); border-radius: 10px; padding: 1rem; position: relative; margin-top: 0.5rem; }
+.reco-card.cave-match { border-color: var(--cv-gold); background: rgba(42,28,10,0.8); }
+.reco-cave-badge { position: absolute; top: -9px; left: 12px; background: var(--cv-gold); color: #1a0f0f; font-size: 0.65rem; font-weight: 700; padding: 1px 8px; border-radius: 5px; letter-spacing: 0.5px; text-transform: uppercase; }
+.star-full { color: var(--cv-gold); }
+.star-empty { color: var(--cv-text3); }
+
+/* Pills / filter */
+.filter-pills { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.filter-pill { padding: 3px 12px; border-radius: 20px; font-size: 0.75rem; cursor: pointer; border: 0.5px solid var(--cv-border); color: var(--cv-text2); background: transparent; transition: all 0.15s; white-space: nowrap; }
+.filter-pill:hover, .filter-pill.active { background: var(--cv-gold); color: #1a0f0f; border-color: var(--cv-gold); }
+
+/* Dropzone */
+.dropzone { border: 2px dashed var(--cv-border2); border-radius: 10px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.2s; color: var(--cv-text3); }
+.dropzone:hover, .dropzone.active { border-color: var(--cv-gold); color: var(--cv-gold); background: rgba(201,168,76,0.05); }
+
+/* Nav badge */
+.nav-badge { background: var(--cv-wine); color: #ffc; font-size: 0.65rem; padding: 1px 5px; border-radius: 6px; }
+
+/* Map container */
+.map-container { width: 100%; background: var(--cv-bg4); border-radius: 10px; overflow: hidden; position: relative; }
+.map-container svg { display: block; width: 100%; }
+
+/* Mobile sidebar */
+@media (max-width: 991.98px) {
+  .sidebar { position: fixed; left: -220px; top: 0; z-index: 1045; transition: left 0.25s; box-shadow: 4px 0 16px rgba(0,0,0,0.4); }
+  .sidebar.show { left: 0; }
+  .layout-main { margin-left: 0 !important; }
+}
+
+/* Animations */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fadeIn 0.25s ease-out; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.8s linear infinite; }
+
+/* Scan camera overlay */
+.scan-frame { width: 70%; height: 55%; border: 2px solid var(--cv-gold); border-radius: 6px; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); pointer-events: none; }
+
+/* Toast override */
+[data-hot-toast] { background: var(--cv-bg4) !important; color: var(--cv-text) !important; border: 0.5px solid var(--cv-border2) !important; border-radius: 10px !important; }

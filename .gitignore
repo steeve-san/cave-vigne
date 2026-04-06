@@ -1,0 +1,67 @@
+# ─── Secrets ───────────────────────────────────────────────
+.env
+.env.local
+.env.production
+.env.*.local
+backend/.env
+
+# ─── Node.js ────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ─── React build ────────────────────────────────────────────
+frontend/build/
+frontend/.env.local
+frontend/.env.production
+
+# ─── Uploads (user data — never commit) ─────────────────────
+backend/uploads/
+uploads/
+
+# ─── Logs ───────────────────────────────────────────────────
+logs/
+*.log
+pm2-logs/
+
+# ─── OS ─────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ─── IDE ────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# ─── Android ────────────────────────────────────────────────
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+android/*.keystore
+android/keystore.properties
+
+# ─── Coverage / Tests ───────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ─── Misc ───────────────────────────────────────────────────
+*.zip
+*.tar.gz
+.cache/
+.parcel-cache/
+dist/

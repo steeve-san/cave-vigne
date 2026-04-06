@@ -1,0 +1,183 @@
+### Cave & Vigne — API Tests (VS Code REST Client)
+### Extension : humao.rest-client
+### Raccourci : Cliquez "Send Request" au-dessus de chaque requête
+
+@baseUrl = http://localhost:3001/api
+@token = REMPLACEZ_APRES_LOGIN
+
+# ─────────────────────────────────────────────────────────
+### 🔐 AUTH — Inscription
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "test@cavevigne.fr",
+  "username": "VinoTesteur",
+  "password": "MotDePasse123!"
+}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### 🔐 AUTH — Connexion
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@cavevigne.fr",
+  "password": "MotDePasse123!"
+}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### 🔐 AUTH — Mon profil
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### 🍷 VINS — Lister (avec filtres)
+GET {{baseUrl}}/wines?status=stock&type=rouge&limit=20
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### 🍷 VINS — Statistiques cave
+GET {{baseUrl}}/wines/stats
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### 🍷 VINS — Ajouter un vin
+POST {{baseUrl}}/wines
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Château Margaux",
+  "appellation": "Margaux AOC",
+  "vintage": 2018,
+  "type": "rouge",
+  "producer": "Château Margaux",
+  "region": "Bordeaux",
+  "grapes": "Cabernet Sauvignon, Merlot",
+  "country": "France",
+  "quantity": 3,
+  "position": "A1",
+  "price": 120,
+  "keep_until": 2035,
+  "notes": "Grand vin de Bordeaux"
+}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### 🍷 VINS — Modifier un vin (remplacer 1 par l'ID réel)
+PUT {{baseUrl}}/wines/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "quantity": 2,
+  "notes": "Magnifique, à garder encore 5 ans"
+}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### 🍷 VINS — Marquer comme bue
+PUT {{baseUrl}}/wines/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "is_drunk": true,
+  "quantity": 0
+}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### 🍷 VINS — Ajouter un accord mets/vin
+POST {{baseUrl}}/wines/1/accords
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "food": "Côte de bœuf grillée",
+  "stars": 5,
+  "notes": "Alliance parfaite, tanins qui s'équilibrent à merveille"
+}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### 🥃 SPIRITUEUX — Lister
+GET {{baseUrl}}/spirits?type=whisky
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### 🥃 SPIRITUEUX — Ajouter
+POST {{baseUrl}}/spirits
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Glenfarclas 25 ans",
+  "type": "whisky",
+  "producer": "Glenfarclas Distillery",
+  "origin": "Écosse, Speyside",
+  "age": "25 ans",
+  "abv": 43,
+  "status": "stock",
+  "price": 180,
+  "rating": 94,
+  "quantity": 1,
+  "notes": "Notes de xérès, fruits secs, épices douces"
+}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### ✦ SOMMELIER — Accord mets/vins IA
+POST {{baseUrl}}/sommelier/accord
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "Lasagnes au bœuf et parmesan"
+}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### ✦ SOMMELIER — Accord depuis un vin
+POST {{baseUrl}}/sommelier/accord
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "query": "Château Margaux 2018 — avec quels plats ?"
+}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### ✦ SOMMELIER — Historique
+GET {{baseUrl}}/sommelier/history
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────
+### ❤️ HEALTH CHECK
+GET {{baseUrl}}/health
+
+###

@@ -1,0 +1,273 @@
+# 🍷 Cave & Vigne
+
+> **Gestionnaire de cave à vin et spiritueux** — Application web full-stack avec sommelier IA, cartes interactives et scan d'étiquettes par vision artificielle.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-C9A84C.svg)](./LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?logo=node.js)](https://nodejs.org)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://react.dev)
+[![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-7952B3?logo=bootstrap)](https://getbootstrap.com)
+[![MariaDB](https://img.shields.io/badge/MariaDB-11-003545?logo=mariadb)](https://mariadb.org)
+
+---
+
+## 🌐 Aperçu
+
+**Cave & Vigne** est une application web complète de gestion de cave personnelle. Elle permet de référencer ses bouteilles de vin et spiritueux, d'obtenir des recommandations d'accords mets/vins grâce à l'IA Claude (Anthropic), de visualiser ses vignobles sur des cartes interactives, et de scanner les étiquettes à la caméra pour importer automatiquement les informations.
+
+### ✨ Fonctionnalités principales
+
+| Fonctionnalité | Description |
+|---|---|
+| 🔐 **Authentification** | Inscription/connexion sécurisée, JWT access + refresh token |
+| 🍷 **Cave à vins** | CRUD complet, quantités, statut bue/en cave, position, prix, millésime |
+| 🥃 **Spiritueux** | Whisky, rhum, cognac, armagnac, calvados, gin, vodka — avec statut ouvert/fermé |
+| ✦ **Sommelier IA** | Recommandations d'accords mets/vins depuis votre cave, via Claude |
+| 📸 **Scan d'étiquettes** | Caméra ou photo importée → Claude Vision extrait les infos automatiquement |
+| 🌍 **Carte mondiale** | Vignobles du monde avec vos bouteilles en surbrillance |
+| 🇫🇷 **Carte France** | Régions viticoles françaises avec cépages, AOC et vos stocks |
+| 🗺 **Carte spiritueux** | Origines mondiales de vos spiritueux |
+| ⭐ **Accords notés** | Notation 5 étoiles des accords mets/vin avec commentaire |
+| 📱 **App Android** | Application WebView native (caméra, offline, swipe-to-refresh) |
+
+---
+
+## 🏗 Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Cloudflare CDN/WAF                │
+└──────────────────────┬──────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────┐
+│                  Nginx (reverse proxy)               │
+│          SSL Let's Encrypt • Gzip • Cache           │
+└──────────┬───────────────────────┬──────────────────┘
+           │                       │
+┌──────────▼──────────┐  ┌────────▼────────────────┐
+│   React 18 + BS5    │  │  Node.js / Express API  │
+│   (SPA build)       │  │  Port 3001 (127.0.0.1)  │
+└─────────────────────┘  └────────┬────────────────┘
+                                  │
+                    ┌─────────────┼──────────────┐
+                    │             │              │
+              ┌─────▼─────┐ ┌────▼────┐  ┌─────▼──────┐
+              │  MariaDB  │ │  Redis  │  │ Anthropic  │
+              │   :3306   │ │  :6379  │  │    API     │
+              └───────────┘ └─────────┘  └────────────┘
+```
+
+**Stack technique :**
+
+| Couche | Technologie |
+|--------|-------------|
+| Frontend | React 18, Bootstrap 5, React Query, D3.js, Axios |
+| Backend | Node.js 20, Express 4, JWT, Multer, Sharp |
+| Base de données | MariaDB 11 (MySQL compatible) |
+| Cache | Redis 7 |
+| IA | Claude (Anthropic) — Sommelier + Vision |
+| Serveur web | Nginx |
+| CDN/Sécurité | Cloudflare |
+| Process manager | PM2 (cluster mode) |
+| Mobile Android | Kotlin WebView + Swipe Refresh |
+
+---
+
+## 🚀 Démarrage rapide (développement local)
+
+### Prérequis
+
+- Node.js 20+
+- MariaDB ou MySQL 8+
+- Redis (optionnel, dégrade gracieusement)
+- Clé API Anthropic (pour Sommelier IA + Scan)
+
+### 1. Backend
+
+```bash
+cd backend
+cp .env.example .env
+# Éditer .env avec vos paramètres
+npm install
+npm run migrate    # Crée les tables
+npm run dev        # Démarre en mode dev (nodemon)
+```
+
+### 2. Frontend
+
+```bash
+cd frontend
+# Créer .env.local
+echo "REACT_APP_API_URL=http://localhost:3001/api" > .env.local
+npm install
+npm start          # Lance sur http://localhost:3000
+```
+
+### 3. Variables d'environnement requises
+
+```env
+# backend/.env
+DB_HOST=localhost
+DB_NAME=cave_vigne
+DB_USER=cave_user
+DB_PASSWORD=votre_mot_de_passe
+
+JWT_SECRET=cle_secrete_64_caracteres_minimum
+
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Optionnel
+REDIS_HOST=localhost
+REDIS_PASSWORD=
+```
+
+---
+
+## 📁 Structure du projet
+
+```
+cave-vigne/
+├── backend/                    # API Express
+│   ├── src/
+│   │   ├── config/
+│   │   │   ├── db.js           # Pool MariaDB
+│   │   │   ├── redis.js        # Cache Redis
+│   │   │   └── migrate.js      # Migration BDD
+│   │   ├── middleware/
+│   │   │   └── auth.js         # Vérification JWT
+│   │   ├── routes/
+│   │   │   ├── auth.js         # Login, register, refresh
+│   │   │   ├── wines.js        # CRUD vins + accords + stats
+│   │   │   ├── spirits.js      # CRUD spiritueux
+│   │   │   └── sommelier.js    # IA accord + scan étiquette
+│   │   └── server.js           # Point d'entrée Express
+│   ├── ecosystem.config.js     # Config PM2
+│   ├── .env.example
+│   └── package.json
+│
+├── frontend/                   # React SPA
+│   ├── src/
+│   │   ├── components/
+│   │   │   └── Layout.jsx      # Sidebar + Topbar responsive
+│   │   ├── context/
+│   │   │   └── AuthContext.jsx # Auth state global
+│   │   ├── pages/
+│   │   │   ├── Login.jsx       # Page connexion
+│   │   │   ├── Register.jsx    # Page inscription
+│   │   │   ├── Dashboard.jsx   # Tableau de bord
+│   │   │   ├── WinesPage.jsx   # Gestion cave vins
+│   │   │   ├── SpiritsPage.jsx # Gestion spiritueux
+│   │   │   ├── SommelierPage.jsx # Sommelier IA
+│   │   │   ├── ScanPage.jsx    # Scanner étiquette
+│   │   │   ├── WorldMapPage.jsx  # Carte mondiale D3
+│   │   │   ├── FranceMapPage.jsx # Carte France D3
+│   │   │   └── SpiritsMapPage.jsx# Carte origines
+│   │   ├── services/
+│   │   │   └── api.js          # Axios + auto-refresh JWT
+│   │   ├── App.jsx             # Routes React Router
+│   │   ├── index.css           # Thème sombre + Bootstrap overrides
+│   │   └── index.js
+│   └── package.json
+│
+├── android/                    # App Android native
+│   └── app/src/main/
+│       ├── java/com/cavevigne/
+│       │   └── MainActivity.kt # WebView + caméra + permissions
+│       ├── res/layout/
+│       │   └── activity_main.xml
+│       └── AndroidManifest.xml
+│
+├── nginx/
+│   └── cavevigne.fr.conf       # Config Nginx production
+│
+├── docs/
+│   └── DEPLOY.md               # Guide déploiement complet
+│
+├── .gitignore
+├── LICENSE
+└── README.md
+```
+
+---
+
+## 🌍 Déploiement production
+
+Voir le guide complet : **[docs/DEPLOY.md](./docs/DEPLOY.md)**
+
+Résumé des étapes :
+
+1. VPS Ubuntu 22.04 — Node.js 20, Nginx, MariaDB, Redis, PM2, Certbot
+2. Configurer `backend/.env` avec vos secrets
+3. `npm run migrate` — créer les tables
+4. `npm run build` dans `/frontend` — générer le build React
+5. Configurer Nginx avec `nginx/cavevigne.fr.conf`
+6. Certbot SSL — `certbot --nginx -d cavevigne.fr`
+7. Cloudflare — proxy activé, mode SSL Full Strict, cache rules
+
+---
+
+## 📱 Application Android
+
+L'application Android est une WebView Kotlin qui encapsule l'application web avec :
+- Accès caméra natif pour le scan d'étiquettes
+- Swipe-to-refresh
+- Gestion des permissions (caméra, stockage)
+- Page d'erreur offline élégante
+
+**Build** : Ouvrir `android/` dans Android Studio → Generate Signed APK
+
+---
+
+## 🔒 Sécurité
+
+- Mots de passe hashés avec **bcrypt** (salt factor 12)
+- **JWT** avec expiration courte (7j) + refresh token (30j)
+- **Rate limiting** : 200 req/15min global, 20 req/15min sur auth
+- **Helmet.js** — headers de sécurité HTTP
+- **CORS** restreint aux origines autorisées
+- **Cloudflare WAF** — protection SQLi, XSS, bots
+- Uploads restreints aux images, optimisés via **Sharp** (WebP)
+- Nginx : blocage des fichiers cachés, headers HSTS
+
+---
+
+## 🤝 Contribution
+
+Les contributions sont les bienvenues ! Pour contribuer :
+
+1. Forkez le dépôt
+2. Créez une branche feature : `git checkout -b feature/ma-fonctionnalite`
+3. Commitez vos changements : `git commit -m 'feat: ajouter ma fonctionnalité'`
+4. Poussez la branche : `git push origin feature/ma-fonctionnalite`
+5. Ouvrez une Pull Request
+
+### Idées d'améliorations
+
+- [ ] Import/export CSV de la cave
+- [ ] Notifications rappel de garder jusqu'à (keep_until)
+- [ ] Application iOS (Swift WebView)
+- [ ] Mode hors-ligne avec Service Worker
+- [ ] Partage de cave entre utilisateurs
+- [ ] Intégration API Vivino (si disponible)
+- [ ] Statistiques avancées et graphiques Chart.js
+- [ ] Dark/Light mode toggle
+
+---
+
+## 📄 Licence
+
+Ce projet est sous licence **MIT** — voir [LICENSE](./LICENSE) pour les détails.
+
+---
+
+## 🙏 Crédits
+
+- **Claude (Anthropic)** — Sommelier IA et analyse d'étiquettes par vision
+- **D3.js** — Cartes interactives
+- **Bootstrap 5** — Interface utilisateur
+- **World Atlas** / **Datamaps** — Données topographiques
+
+---
+
+<p align="center">
+  Fait avec ❤️ et 🍷 en Normandie
+</p>
