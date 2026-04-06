@@ -22,8 +22,82 @@ DEBIAN_VERSION=$(cut -d. -f1 /etc/debian_version)
 [[ "$DEBIAN_VERSION" -ge 13 ]] || warn "Recommandé sur Debian 13+. Version détectée : $(cat /etc/debian_version)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="/var/www/cave-vigne"
+DEPLOY_USER="${SUDO_USER:-www-data}"
 
-# ─── Configuration interactive ───────────────────────────────────────────────
+# ─── Détection install existante ─────────────────────────────────────────────
+UPDATE_MODE=false
+if [[ -f "${APP_DIR}/backend/.env" ]] && command -v pm2 &>/dev/null; then
+  echo ""
+  echo -e "${BOLD}Installation existante détectée${NC} (${APP_DIR})"
+  echo ""
+  echo "  [1] Mettre à jour l'application (code + dépendances, conserve .env et DB)"
+  echo "  [2] Déploiement complet (réinstalle tout)"
+  echo ""
+  read -rp "Que souhaitez-vous faire ? [1/2] : " INSTALL_MODE
+  [[ "$INSTALL_MODE" == "1" ]] && UPDATE_MODE=true
+fi
+
+# ─── Mode UPDATE ──────────────────────────────────────────────────────────────
+if [[ "$UPDATE_MODE" == "true" ]]; then
+  section "Mise à jour Cave & Vigne"
+
+  # Lire le domaine depuis .env existant
+  DOMAIN=$(grep "^API_URL=" "${APP_DIR}/backend/.env" 2>/dev/null | sed 's|.*://||' || true)
+  [[ -z "$DOMAIN" ]] && { read -rp "Domaine (ex: cavevigne.fr) : " DOMAIN; }
+
+  echo ""
+  info "Domaine   : $DOMAIN"
+  info "App dir   : $APP_DIR"
+  info "Actions   : code → npm install → migrate → build frontend → pm2 restart"
+  echo ""
+  read -rp "Confirmer la mise à jour ? [o/N] " CONFIRM
+  [[ "$CONFIRM" =~ ^[oO]$ ]] || { info "Annulé."; exit 0; }
+
+  # ── Mise à jour backend ──
+  section "1/3 — Mise à jour backend"
+  cp -r "${SCRIPT_DIR}/backend/." "${APP_DIR}/backend/"
+  # Préserver le .env existant (l'écrasement ci-dessus ne touche pas .env car il n'est pas dans le dépôt)
+  cd "${APP_DIR}/backend"
+  npm install --omit=dev --quiet
+  npm run migrate
+  success "Backend mis à jour + migrations exécutées"
+
+  # ── Mise à jour frontend ──
+  section "2/3 — Build frontend"
+  cd "${SCRIPT_DIR}/frontend"
+  # Récupérer REACT_APP_API_URL depuis build existant si .env.production absent
+  if [[ ! -f .env.production ]]; then
+    PROTO=$(grep "^API_URL=" "${APP_DIR}/backend/.env" | cut -d= -f2 | sed 's|://.*||' || echo "https")
+    echo "REACT_APP_API_URL=${PROTO}://${DOMAIN}/api" > .env.production
+  fi
+  npm install --quiet
+  npm run build
+  cp -r build/. "${APP_DIR}/frontend/build/"
+  success "Frontend buildé et copié"
+
+  # ── Redémarrage PM2 ──
+  section "3/3 — Redémarrage PM2"
+  pm2 restart cave-vigne-api --update-env 2>/dev/null || \
+    pm2 start "${APP_DIR}/backend/src/server.js" \
+      --name cave-vigne-api --cwd "${APP_DIR}/backend" \
+      --max-memory-restart 250M -i max --env production
+  pm2 save
+  success "Application redémarrée"
+
+  # ── Résumé ──
+  section "Mise à jour terminée ✓"
+  PROTO=$(grep "^API_URL=" "${APP_DIR}/backend/.env" | cut -d= -f2 | sed 's|://.*||' || echo "https")
+  echo ""
+  echo -e "  ${GREEN}Application${NC} : ${PROTO}://${DOMAIN}"
+  echo -e "  ${GREEN}API health${NC}  : ${PROTO}://${DOMAIN}/api/health"
+  echo -e "  ${GREEN}Logs PM2${NC}    : pm2 logs cave-vigne-api"
+  echo ""
+  pm2 status
+  exit 0
+fi
+
+# ─── Configuration interactive (déploiement complet) ─────────────────────────
 section "Configuration"
 
 read -rp  "Domaine principal (ex: cavevigne.fr) : " DOMAIN
@@ -61,8 +135,6 @@ read -rsp "Mot de passe admin (min 8 chars) : " ADMIN_PASSWORD; echo
 [[ ${#ADMIN_PASSWORD} -lt 8 ]] && error "Mot de passe admin trop court."
 
 JWT_SECRET=$(openssl rand -hex 64 2>/dev/null || tr -dc 'A-Za-z0-9' </dev/urandom | head -c 128)
-APP_DIR="/var/www/cave-vigne"
-DEPLOY_USER="${SUDO_USER:-www-data}"
 PROTO=$( [[ "$USE_SSL" == "true" ]] && echo "https" || echo "http" )
 
 echo ""
