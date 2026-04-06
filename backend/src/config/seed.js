@@ -21,7 +21,9 @@ async function seed() {
   }
 
   // Récupération des paramètres (args CLI ou env)
-  const email    = process.argv[2] || process.env.ADMIN_EMAIL;
+  const rawEmail = process.argv[2] || process.env.ADMIN_EMAIL;
+  // Normalisation identique à express-validator normalizeEmail() : lowercase
+  const email    = rawEmail ? rawEmail.toLowerCase().trim() : rawEmail;
   const username = process.argv[3] || process.env.ADMIN_USERNAME;
   const password = process.argv[4] || process.env.ADMIN_PASSWORD;
 
