@@ -56,8 +56,12 @@ if [[ "$UPDATE_MODE" == "true" ]]; then
 
   # ── Mise à jour backend ──
   section "1/3 — Mise à jour backend"
+  # Sauvegarder .env avant la copie (au cas où le source en contiendrait un)
+  cp "${APP_DIR}/backend/.env" /tmp/cave-vigne-env.bak
   cp -r "${SCRIPT_DIR}/backend/." "${APP_DIR}/backend/"
-  # Préserver le .env existant (l'écrasement ci-dessus ne touche pas .env car il n'est pas dans le dépôt)
+  # Restaurer le .env de production (ne jamais l'écraser)
+  cp /tmp/cave-vigne-env.bak "${APP_DIR}/backend/.env"
+  chmod 600 "${APP_DIR}/backend/.env"
   cd "${APP_DIR}/backend"
   npm install --omit=dev --quiet
   npm run migrate
