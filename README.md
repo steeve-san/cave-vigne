@@ -182,6 +182,7 @@ cave-vigne/
 ├── docs/
 │   └── DEPLOY.md               # Guide déploiement complet
 │
+├── deploy.sh                   # Script déploiement automatisé Debian 13
 ├── .gitignore
 ├── LICENSE
 └── README.md
@@ -191,16 +192,45 @@ cave-vigne/
 
 ## 🌍 Déploiement production
 
+### Script automatisé — Debian 13
+
+Un script de déploiement complet est fourni pour **Debian 13 (Trixie)** :
+
+```bash
+# Sur le VPS, après avoir cloné le dépôt
+sudo bash deploy.sh
+```
+
+Le script installe et configure **automatiquement** l'ensemble de la stack :
+
+| Étape | Action |
+|-------|--------|
+| 1 | Mise à jour système + dépendances (`libvips`, `curl`, etc.) |
+| 2 | Node.js 20 LTS + PM2 (cluster mode) |
+| 3 | MariaDB 11 — création BDD, utilisateur, tuning InnoDB |
+| 4 | Redis — sécurisé (bind 127.0.0.1, mot de passe) |
+| 5 | Nginx — config copiée depuis `nginx/`, SSL Let's Encrypt |
+| 6 | Backend + Frontend — copie, `.env` généré, migration BDD, build React |
+| 7 | PM2 startup systemd |
+| 8 | Certbot SSL + renouvellement automatique (cron 3h) |
+| 9 | UFW — SSH + HTTPS ouverts, MariaDB/Redis/3001 bloqués |
+
+> Le script génère automatiquement le `JWT_SECRET` et demande de manière interactive le domaine, l'email SSL, les mots de passe et la clé API Anthropic.
+
+**Prérequis** : le DNS du domaine doit pointer sur l'IP du VPS avant le lancement (nécessaire pour Certbot).
+
+### Déploiement manuel
+
 Voir le guide complet : **[docs/DEPLOY.md](./docs/DEPLOY.md)**
 
 Résumé des étapes :
 
-1. VPS Ubuntu 22.04 — Node.js 20, Nginx, MariaDB, Redis, PM2, Certbot
+1. VPS Debian 13 — Node.js 20, Nginx, MariaDB 11, Redis, PM2, Certbot
 2. Configurer `backend/.env` avec vos secrets
 3. `npm run migrate` — créer les tables
 4. `npm run build` dans `/frontend` — générer le build React
 5. Configurer Nginx avec `nginx/cavevigne.fr.conf`
-6. Certbot SSL — `certbot --nginx -d cavevigne.fr`
+6. Certbot SSL — `certbot --nginx -d votre-domaine.fr`
 7. Cloudflare — proxy activé, mode SSL Full Strict, cache rules
 
 ---
