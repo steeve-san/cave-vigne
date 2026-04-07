@@ -11,10 +11,10 @@ const en = {
     sommelier: 'AI Sommelier', scan: 'Scan', mapFrance: 'France map',
     mapWorld: 'World map', mapSpirits: 'Origins', admin: 'Administration',
     discovery: 'Discovery', collection: 'Wines', privateCollection: 'Private collection',
-    profile: 'Profile',
+    profile: 'Profile', spiritsSection: 'Spirits', readOnly: 'Read only', wishlist: 'Wishlist',
   },
   auth: {
-    login: 'Login', register: 'Register', logout: 'Logout',
+    login: 'Login', register: 'Register', logout: 'Logout', goodbye: 'Goodbye!',
     email: 'Email', password: 'Password', username: 'Username',
     confirmPassword: 'Confirm password', loginBtn: 'Sign in',
     registerBtn: 'Create account', noAccount: 'No account yet?',

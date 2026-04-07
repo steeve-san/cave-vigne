@@ -47,10 +47,12 @@ export default api;
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export const authAPI = {
-  login:    (email, password) => api.post('/auth/login', { email, password }),
-  register: (email, username, password) => api.post('/auth/register', { email, username, password }),
-  logout:   () => api.post('/auth/logout', { refresh: localStorage.getItem('cv_refresh') }),
-  me:       () => api.get('/auth/me'),
+  login:          (email, password) => api.post('/auth/login', { email, password }),
+  register:       (email, username, password) => api.post('/auth/register', { email, username, password }),
+  logout:         () => api.post('/auth/logout', { refresh: localStorage.getItem('cv_refresh') }),
+  me:             () => api.get('/auth/me'),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword:  (token, password) => api.post('/auth/reset-password', { token, password }),
 };
 
 // ─── Wines ────────────────────────────────────────────────────────────────────
@@ -62,6 +64,8 @@ export const winesAPI = {
   addAccord: (id, data) => api.post(`/wines/${id}/accords`, data),
   stats:     ()       => api.get('/wines/stats'),
   enrich:    (id)     => api.get(`/wines/${id}/enrich`),
+  exportCsv: ()       => api.get('/wines/export', { responseType: 'blob' }),
+  importCsv: (file)   => { const fd = new FormData(); fd.append('file', file); return api.post('/wines/import', fd); },
 };
 
 // ─── Spirits ──────────────────────────────────────────────────────────────────
@@ -78,6 +82,23 @@ export const sommelierAPI = {
   scan:    (formData) => api.post('/sommelier/scan', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   history: ()         => api.get('/sommelier/history'),
   recipes: (food)     => api.get('/sommelier/recipes', { params: { food } }),
+  analyse: ()         => api.post('/sommelier/analyse'),
+};
+
+// ─── Tasting notes ────────────────────────────────────────────────────────────
+export const tastingAPI = {
+  list:   (wineId)       => api.get(`/tasting/${wineId}`),
+  create: (wineId, data) => api.post(`/tasting/${wineId}`, data),
+  update: (id, data)     => api.put(`/tasting/note/${id}`, data),
+  remove: (id)           => api.delete(`/tasting/note/${id}`),
+};
+
+// ─── Wishlist ─────────────────────────────────────────────────────────────────
+export const wishlistAPI = {
+  list:   (params) => api.get('/wishlist', { params }),
+  create: (data)   => api.post('/wishlist', data),
+  update: (id, data) => api.put(`/wishlist/${id}`, data),
+  remove: (id)     => api.delete(`/wishlist/${id}`),
 };
 
 // ─── Admin ────────────────────────────────────────────────────────────────────

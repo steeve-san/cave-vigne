@@ -198,6 +198,59 @@ router.post('/:id/accords', auth, requireRole('user', 'admin'),
   }
 );
 
+// ─── GET /api/wines/export — export as CSV ───────────────────────────────────
+router.get('/export', auth, async (req, res) => {
+  const role = req.user.role;
+  try {
+    const condition = role === 'user' ? 'WHERE user_id = ?' : '';
+    const params = role === 'user' ? [req.user.id] : [];
+    const [rows] = await db.query(
+      `SELECT name, appellation, vintage, type, producer, region, country, grapes,
+              quantity, price, keep_until, position, notes, is_drunk, created_at
+       FROM wines ${condition} ORDER BY name`, params
+    );
+    const headers = ['name','appellation','vintage','type','producer','region','country','grapes',
+                     'quantity','price','keep_until','position','notes','is_drunk','created_at'];
+    const escape = v => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`;
+    const csv = [headers.join(','), ...rows.map(r => headers.map(h => escape(r[h])).join(','))].join('\n');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="cave-vigne-${new Date().toISOString().slice(0,10)}.csv"`);
+    res.send('\uFEFF' + csv);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+// ─── POST /api/wines/import — import from CSV ─────────────────────────────────
+router.post('/import', auth, requireRole('user','admin'), upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Fichier requis' });
+  try {
+    const text = req.file.buffer.toString('utf-8').replace(/^\uFEFF/, '');
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) return res.status(400).json({ error: 'Fichier vide' });
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    const VALID_TYPES = ['rouge','blanc','rosé','pétillant'];
+    let inserted = 0, skipped = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].match(/(".*?"|[^,]+)(?=,|$)/g) || [];
+      const row = {};
+      headers.forEach((h, idx) => { row[h] = (values[idx] || '').replace(/^"|"$/g, '').trim(); });
+      if (!row.name) { skipped++; continue; }
+      const type = VALID_TYPES.includes(row.type) ? row.type : 'rouge';
+      await db.query(
+        `INSERT INTO wines (user_id,name,appellation,vintage,type,producer,region,grapes,country,quantity,price,keep_until,position,notes,is_drunk)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [req.user.id, row.name, row.appellation||null, row.vintage||null, type, row.producer||null,
+         row.region||null, row.grapes||null, row.country||'France', parseInt(row.quantity)||1,
+         parseFloat(row.price)||null, row.keep_until||null, row.position||null, row.notes||null,
+         row.is_drunk === '1' ? 1 : 0]
+      );
+      inserted++;
+    }
+    await cacheDel(`wines:${req.user.id}:*`);
+    await cacheDel('wines:all:*');
+    res.json({ inserted, skipped });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
 // ─── GET /api/wines/stats ─────────────────────────────────────────────────────
 // visiteur/admin → stats globales ; user → ses propres stats
 router.get('/stats', auth, async (req, res) => {

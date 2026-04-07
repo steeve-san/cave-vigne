@@ -19,6 +19,9 @@ import SommelierPage from './pages/SommelierPage';
 import ScanPage from './pages/ScanPage';
 import AdminPage from './pages/AdminPage';
 import ProfilePage from './pages/ProfilePage';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import WishlistPage from './pages/WishlistPage';
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, retry: 1 } } });
 
@@ -76,8 +79,10 @@ export default function App() {
                 }}
               />
               <Routes>
-                <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
-                <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+                <Route path="/login"           element={<PublicRoute><Login /></PublicRoute>} />
+                <Route path="/register"        element={<PublicRoute><Register /></PublicRoute>} />
+                <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+                <Route path="/reset-password"  element={<PublicRoute><ResetPassword /></PublicRoute>} />
 
                 {/* Routes accessible to all authenticated roles */}
                 <Route path="/" element={<VisitorAllowed><Layout /></VisitorAllowed>}>
@@ -91,6 +96,7 @@ export default function App() {
                   {/* Restricted to user + admin */}
                   <Route path="sommelier" element={<PrivateRoute><SommelierPage /></PrivateRoute>} />
                   <Route path="scan"      element={<PrivateRoute><ScanPage /></PrivateRoute>} />
+                  <Route path="wishlist"  element={<PrivateRoute><WishlistPage /></PrivateRoute>} />
 
                   {/* Admin only */}
                   <Route path="admin" element={<PrivateRoute requiredRole="admin"><AdminPage /></PrivateRoute>} />

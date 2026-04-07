@@ -47,6 +47,11 @@ app.use('/api/wines',    require('./routes/wines'));
 app.use('/api/spirits',  require('./routes/spirits'));
 app.use('/api/sommelier',require('./routes/sommelier'));
 app.use('/api/settings', require('./routes/settings'));
+app.use('/api/tasting',  require('./routes/tasting'));
+app.use('/api/wishlist', require('./routes/wishlist'));
+
+// Scheduled jobs
+require('./jobs/notifications').startNotifications();
 
 // Health check — public, teste vraiment la DB
 app.get('/api/health', async (_req, res) => {

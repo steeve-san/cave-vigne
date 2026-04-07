@@ -32,7 +32,7 @@ export default function Layout() {
   };
   const title = PAGE_TITLES[location.pathname] || 'Cave & Vigne';
 
-  const handleLogout = async () => { await logout(); toast.success('Au revoir !'); };
+  const handleLogout = async () => { await logout(); toast.success(t('auth.goodbye')); };
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
   // Theme icon
@@ -46,7 +46,8 @@ export default function Layout() {
     { path: '/scan',      icon: 'bi-camera',     label: t('nav.scan'),      hide: isReadOnly },
     { path: '/map/france',icon: 'bi-geo-alt',    label: t('nav.mapFrance') },
     { path: '/map/world', icon: 'bi-globe',      label: t('nav.mapWorld') },
-    { path: '/spirits',   icon: 'bi-cup-hot',    label: t('nav.spirits'),   badge: spiritCount || null, section: 'Spiritueux' },
+    { path: '/wishlist',  icon: 'bi-heart',       label: t('nav.wishlist'),  hide: isReadOnly },
+    { path: '/spirits',   icon: 'bi-cup-hot',    label: t('nav.spirits'),   badge: spiritCount || null, section: t('nav.spiritsSection') },
     { path: '/map/spirits',icon:'bi-map',        label: t('nav.mapSpirits') },
     ...(isAdmin ? [{ path: '/admin', icon: 'bi-shield-check', label: t('nav.admin'), section: '' }] : []),
   ].filter(item => !item.hide);
@@ -121,7 +122,7 @@ export default function Layout() {
         </div>
         {isReadOnly && (
           <div style={{ fontSize: '0.68rem', color: 'var(--cv-text3)', marginBottom: '0.5rem', textAlign: 'center' }}>
-            <i className="bi bi-eye me-1"></i>Lecture seule
+            <i className="bi bi-eye me-1"></i>{t('nav.readOnly')}
           </div>
         )}
         <div className="d-flex gap-2 mb-2">

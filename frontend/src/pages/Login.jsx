@@ -43,7 +43,10 @@ export default function Login() {
             </div>
           </div>
           <div className="mb-4">
-            <label className="form-label">Mot de passe</label>
+            <div className="d-flex justify-content-between align-items-center mb-1">
+              <label className="form-label mb-0">Mot de passe</label>
+              <Link to="/forgot-password" style={{ fontSize: '0.75rem', color: 'var(--cv-text3)', textDecoration: 'none' }}>Mot de passe oublié ?</Link>
+            </div>
             <div className="input-group">
               <span className="input-group-text"><i className="bi bi-lock"></i></span>
               <input type={showPwd ? 'text' : 'password'} className="form-control" placeholder="••••••••" required

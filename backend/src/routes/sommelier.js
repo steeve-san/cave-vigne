@@ -100,6 +100,62 @@ Si ce n'est pas une étiquette de vin: {"error":"not_wine"}` }
   }
 });
 
+// POST /api/sommelier/analyse — AI cave analysis report
+router.post('/analyse', auth, async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY)
+    return res.status(503).json({ error: 'Clé API Anthropic non configurée.' });
+  try {
+    const [wines] = await db.query(
+      `SELECT name, type, vintage, appellation, grapes, region, country, quantity, price, keep_until
+       FROM wines WHERE user_id=? AND is_drunk=0 AND quantity>0 ORDER BY created_at DESC LIMIT 100`,
+      [req.user.id]
+    );
+    const [spirits] = await db.query(
+      `SELECT name, type, origin, age, abv, rating FROM spirits WHERE user_id=? AND status!='empty'`,
+      [req.user.id]
+    );
+    const [[stats]] = await db.query(
+      `SELECT COUNT(*) as refs, SUM(quantity) as bottles,
+              COUNT(DISTINCT country) as countries,
+              SUM(COALESCE(price*quantity,0)) as value
+       FROM wines WHERE user_id=? AND is_drunk=0 AND quantity>0`,
+      [req.user.id]
+    );
+
+    const caveList = wines.map(w => `- ${w.name} (${w.type}, ${w.vintage||'NV'}, ${w.region||w.country||''}) ×${w.quantity}${w.keep_until ? ` [boire avant ${w.keep_until}]` : ''}`).join('\n');
+
+    const prompt = `Tu es un expert en oenologie. Analyse cette cave privée et génère un rapport détaillé.
+
+STATISTIQUES: ${stats.refs} références, ${stats.bottles} bouteilles, ${stats.countries} pays, valeur ~${Math.round(stats.value || 0)}€
+VINS EN CAVE:
+${caveList || '(vide)'}
+SPIRITUEUX: ${spirits.length} bouteilles
+
+Génère un rapport JSON:
+{
+  "score_diversite": 1-10,
+  "score_equilibre": 1-10,
+  "points_forts": ["..."],
+  "axes_amelioration": ["..."],
+  "a_deguster_maintenant": ["nom de vin à boire prochainement"],
+  "a_garder": ["nom de vin à garder"],
+  "manques_notables": ["types/régions absents"],
+  "conseil_principal": "conseil personnalisé en 2-3 phrases",
+  "occasion_parfaite": {"occasion": "...", "vin": "nom depuis la cave", "pourquoi": "..."}
+}`;
+
+    const text = await callClaude([{ role: 'user', content: prompt }], 1200);
+    let result;
+    try { result = JSON.parse(text.replace(/```json|```/g, '').trim()); }
+    catch { result = { conseil_principal: text, points_forts: [], axes_amelioration: [] }; }
+
+    res.json({ ...result, stats });
+  } catch (err) {
+    console.error('[analyse] error:', err);
+    res.status(500).json({ error: err.message || 'Erreur analyse' });
+  }
+});
+
 // GET /api/sommelier/history
 router.get('/history', auth, async (req, res) => {
   const [rows] = await db.query('SELECT id, query, result, created_at FROM sommelier_sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 20', [req.user.id]);

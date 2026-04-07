@@ -130,6 +130,52 @@ async function migrate() {
       updated_by INT,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      token VARCHAR(100) NOT NULL UNIQUE,
+      expires_at DATETIME NOT NULL,
+      used BOOLEAN DEFAULT FALSE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_token (token)
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS tasting_notes (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      wine_id INT NOT NULL,
+      user_id INT NOT NULL,
+      tasted_at DATE NOT NULL,
+      rating TINYINT CHECK (rating BETWEEN 1 AND 100),
+      color_desc VARCHAR(255),
+      nose VARCHAR(500),
+      palate VARCHAR(500),
+      finish VARCHAR(500),
+      overall TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (wine_id) REFERENCES wines(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_wine (wine_id)
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS wishlist (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      producer VARCHAR(255),
+      vintage YEAR,
+      type ENUM('rouge','blanc','rosé','pétillant','autre') DEFAULT 'rouge',
+      region VARCHAR(255),
+      priority ENUM('low','medium','high') DEFAULT 'medium',
+      price_max DECIMAL(10,2),
+      url VARCHAR(500),
+      notes TEXT,
+      found BOOLEAN DEFAULT FALSE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_user (user_id)
+    ) ENGINE=InnoDB;
   `;
 
   await conn.query(schema);

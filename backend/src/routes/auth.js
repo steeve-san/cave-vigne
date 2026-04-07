@@ -1,6 +1,7 @@
 // src/routes/auth.js
 const router = require('express').Router();
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const db = require('../config/db');
@@ -8,6 +9,7 @@ const auth = require('../middleware/auth');
 const { requireRole } = require('../middleware/auth');
 const speakeasy = require('speakeasy');
 const qrcode = require('qrcode');
+const { sendMail } = require('../config/email');
 
 const genTokens = (userId) => {
   const access  = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
@@ -259,6 +261,66 @@ router.delete('/admin/users/:id', auth, requireRole('admin'), async (req, res) =
     await db.query('UPDATE users SET is_active = 0 WHERE id = ?', [req.params.id]);
     res.json({ message: 'Utilisateur désactivé' });
   } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ─── POST /api/auth/forgot-password ───────────────────────────────────────────
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email requis' });
+  try {
+    const [users] = await db.query('SELECT id, email FROM users WHERE email=? AND is_active=1', [email]);
+    // Always return 200 to avoid user enumeration
+    if (!users.length) return res.json({ message: 'Email envoyé si le compte existe' });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2h
+    await db.query(
+      'INSERT INTO password_resets (user_id,token,expires_at) VALUES (?,?,?)',
+      [users[0].id, token, expires]
+    );
+
+    const frontendUrl = process.env.FRONTEND_URL || process.env.ALLOWED_ORIGINS?.split(',')[0] || 'http://localhost:3000';
+    const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+    await sendMail({
+      to: email,
+      subject: 'Cave & Vigne — Réinitialisation du mot de passe',
+      html: `<p>Bonjour,</p>
+             <p>Cliquez sur ce lien pour réinitialiser votre mot de passe :</p>
+             <p><a href="${resetLink}">${resetLink}</a></p>
+             <p>Ce lien est valide 2 heures. Ignorez cet email si vous n'avez pas fait cette demande.</p>`,
+    });
+    res.json({ message: 'Email envoyé si le compte existe' });
+  } catch (err) {
+    console.error('[forgot-password]', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ─── POST /api/auth/reset-password ────────────────────────────────────────────
+router.post('/reset-password', [
+  body('token').notEmpty(),
+  body('password').isLength({ min: 8 }),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+  const { token, password } = req.body;
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM password_resets WHERE token=? AND used=0 AND expires_at > NOW()',
+      [token]
+    );
+    if (!rows.length) return res.status(400).json({ error: 'Token invalide ou expiré' });
+
+    const hash = await bcrypt.hash(password, 12);
+    await db.query('UPDATE users SET password_hash=? WHERE id=?', [hash, rows[0].user_id]);
+    await db.query('UPDATE password_resets SET used=1 WHERE id=?', [rows[0].id]);
+    // Revoke all refresh tokens for security
+    await db.query('DELETE FROM refresh_tokens WHERE user_id=?', [rows[0].user_id]);
+    res.json({ message: 'Mot de passe modifié' });
+  } catch (err) {
+    console.error('[reset-password]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

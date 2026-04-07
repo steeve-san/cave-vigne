@@ -1,0 +1,18 @@
+{
+  "short_name": "Cave & Vigne",
+  "name": "Cave & Vigne — Collection privée",
+  "description": "Gérez votre cave à vin et spiritueux",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a0f0f",
+  "theme_color": "#1a0f0f",
+  "scope": "/",
+  "icons": [
+    { "src": "/icons/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" }
+  ],
+  "categories": ["lifestyle", "utilities"],
+  "lang": "fr",
+  "dir": "ltr"
+}

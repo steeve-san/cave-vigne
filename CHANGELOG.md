@@ -7,6 +7,33 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
+## [1.3.0] — 2026-04-07
+
+### Ajouté
+
+- 🌊 **Journal de dégustation** — notes par bouteille (robe, nez, bouche, finale, note /100), onglet dédié dans le modal vin
+- 💌 **Liste de souhaits** — wishlist de vins à acquérir avec priorité, budget max, URL boutique
+- 📤 **Export / Import CSV** — cave exportable et importable via `.csv` (compatible Excel)
+- 🔑 **Réinitialisation mot de passe par email** — lien valide 2h, révocation automatique des tokens
+- 📊 **Graphique Chart.js** — donut interactif de répartition par type sur le tableau de bord
+- 🤖 **Rapport d'analyse IA** — score diversité/équilibre, points forts, axes d'amélioration, occasion parfaite (widget dashboard)
+- 🔔 **Notifications keep_until** — cron quotidien (08h00) envoyant un email pour les vins approchant leur apogée
+- ✅ **Sélection multiple** — cases à cocher pour marquer plusieurs vins bus ou les supprimer en lot
+- 📱 **PWA** — manifest + service worker, installable sur mobile/desktop
+- 🗺️ **Navigation** — lien "Liste de souhaits" dans la sidebar
+- 🔤 **i18n** — tous les derniers strings hardcodés en français remplacés par `t()` (`'Au revoir !'`, `'Spiritueux'`, `'Lecture seule'`)
+
+### Backend
+- Nouveaux endpoints : `GET /api/wines/export`, `POST /api/wines/import`, `GET|POST|PUT|DELETE /api/tasting/*`, `GET|POST|PUT|DELETE /api/wishlist`, `POST /api/sommelier/analyse`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`
+- Nouvelles tables SQL : `password_resets`, `tasting_notes`, `wishlist`
+- `node-cron ^3.0.3` ajouté pour les notifications planifiées
+
+### Frontend
+- `chart.js ^4.4`, `react-chartjs-2 ^5.2` ajoutés
+- Nouvelles pages : `ForgotPassword`, `ResetPassword`, `WishlistPage`
+
+---
+
 ## [1.2.0] — 2026-04-07
 
 ### Stack

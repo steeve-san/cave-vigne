@@ -1,7 +1,7 @@
 // src/pages/WinesPage.jsx
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { winesAPI } from '../services/api';
+import { winesAPI, tastingAPI } from '../services/api';
 import { useLang } from '../context/LangContext';
 import toast from 'react-hot-toast';
 
@@ -56,6 +56,14 @@ function WineModal({ wine, onClose, onSave }) {
   const [loading, setLoading] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [enrichResults, setEnrichResults] = useState(null);
+  const [newTasting, setNewTasting] = useState({ tasted_at: new Date().toISOString().slice(0,10), rating: '', color_desc: '', nose: '', palate: '', finish: '', overall: '' });
+  const [savingTasting, setSavingTasting] = useState(false);
+  const qcInner = useQueryClient();
+  const { data: tastingNotes = [] } = useQuery({
+    queryKey: ['tasting', wine?.id],
+    queryFn: () => wine?.id ? tastingAPI.list(wine.id).then(r => r.data) : [],
+    enabled: !!wine?.id && tab === 'dégustation',
+  });
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const handleEnrich = async () => {
@@ -112,7 +120,7 @@ function WineModal({ wine, onClose, onSave }) {
               <button className="btn-close" onClick={onClose} />
             </div>
             <div style={{ borderBottom: '1px solid var(--cv-border)', width: '100%' }}>
-              {[['vin', t('wines.tabWine')], ['domaine', t('wines.tabDomain')], ['photos', t('wines.tabPhotos')]].map(([key, label]) => (
+              {[['vin', t('wines.tabWine')], ['domaine', t('wines.tabDomain')], ['photos', t('wines.tabPhotos')], ...(wine?.id ? [['dégustation', '📓 Dégustation']] : [])].map(([key, label]) => (
                 <button key={key} type="button" style={tabStyle(tab === key)} onClick={() => setTab(key)}>
                   {label}
                 </button>
@@ -195,6 +203,95 @@ function WineModal({ wine, onClose, onSave }) {
                   </div>
                 </div>
               )}
+
+              {/* ── Tab Dégustation ──────────────────────────── */}
+              {tab === 'dégustation' && wine?.id && (
+                <div>
+                  {/* Existing notes */}
+                  {tastingNotes.length > 0 && (
+                    <div className="mb-4">
+                      {tastingNotes.map(note => (
+                        <div key={note.id} className="card mb-2" style={{ background: 'var(--cv-bg3)' }}>
+                          <div className="card-body p-3">
+                            <div className="d-flex justify-content-between align-items-start mb-2">
+                              <div>
+                                <span style={{ fontSize: '0.78rem', color: 'var(--cv-gold)' }}>{note.tasted_at}</span>
+                                {note.rating && <span className="ms-2" style={{ fontSize: '0.78rem', color: 'var(--cv-text2)' }}>{note.rating}/100</span>}
+                              </div>
+                              <button className="btn btn-sm" style={{ color: 'var(--cv-text3)', background: 'none', border: 'none', padding: 0 }}
+                                onClick={async () => { await tastingAPI.remove(note.id); qcInner.invalidateQueries(['tasting', wine.id]); }}>
+                                <i className="bi bi-x"></i>
+                              </button>
+                            </div>
+                            {note.color_desc && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>Robe:</strong> {note.color_desc}</div>}
+                            {note.nose && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>Nez:</strong> {note.nose}</div>}
+                            {note.palate && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>Bouche:</strong> {note.palate}</div>}
+                            {note.finish && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>Finale:</strong> {note.finish}</div>}
+                            {note.overall && <div style={{ fontSize: '0.82rem', color: 'var(--cv-text2)', fontStyle: 'italic', marginTop: 4 }}>{note.overall}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Add new note */}
+                  <div style={{ borderTop: tastingNotes.length ? '0.5px solid var(--cv-border)' : 'none', paddingTop: tastingNotes.length ? '1rem' : 0 }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--cv-gold)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Nouvelle note de dégustation</div>
+                    <div className="row g-2">
+                      <div className="col-md-6">
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Date</label>
+                        <input className="form-control form-control-sm" type="date" value={newTasting.tasted_at}
+                          onChange={e => setNewTasting(f => ({ ...f, tasted_at: e.target.value }))} />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Note /100</label>
+                        <input className="form-control form-control-sm" type="number" min="1" max="100" value={newTasting.rating}
+                          onChange={e => setNewTasting(f => ({ ...f, rating: e.target.value }))} placeholder="90" />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Robe</label>
+                        <input className="form-control form-control-sm" value={newTasting.color_desc}
+                          onChange={e => setNewTasting(f => ({ ...f, color_desc: e.target.value }))} placeholder="Rubis profond, grenat…" />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Nez</label>
+                        <input className="form-control form-control-sm" value={newTasting.nose}
+                          onChange={e => setNewTasting(f => ({ ...f, nose: e.target.value }))} placeholder="Fruits noirs, épices…" />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Bouche</label>
+                        <input className="form-control form-control-sm" value={newTasting.palate}
+                          onChange={e => setNewTasting(f => ({ ...f, palate: e.target.value }))} placeholder="Tanins soyeux…" />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Finale</label>
+                        <input className="form-control form-control-sm" value={newTasting.finish}
+                          onChange={e => setNewTasting(f => ({ ...f, finish: e.target.value }))} placeholder="Longue, persistante…" />
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Commentaire général</label>
+                        <textarea className="form-control form-control-sm" rows={3} value={newTasting.overall}
+                          onChange={e => setNewTasting(f => ({ ...f, overall: e.target.value }))} placeholder="Impressions générales, accord suggéré…" />
+                      </div>
+                      <div className="col-12">
+                        <button type="button" className="btn btn-sm btn-outline-gold" disabled={savingTasting || !newTasting.tasted_at}
+                          onClick={async () => {
+                            setSavingTasting(true);
+                            try {
+                              await tastingAPI.create(wine.id, newTasting);
+                              qcInner.invalidateQueries(['tasting', wine.id]);
+                              setNewTasting({ tasted_at: new Date().toISOString().slice(0,10), rating: '', color_desc: '', nose: '', palate: '', finish: '', overall: '' });
+                              toast.success('Note ajoutée !');
+                            } catch { toast.error('Erreur'); }
+                            finally { setSavingTasting(false); }
+                          }}>
+                          {savingTasting ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-plus-circle me-1"></i>}
+                          Enregistrer la note
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="modal-footer">
@@ -256,6 +353,9 @@ export default function WinesPage() {
   const [typeF, setTypeF] = useState('all');
   const [statusF, setStatusF] = useState('all');
   const [modal, setModal] = useState(null); // null | { mode: 'add'|'edit'|'accord', wine? }
+  const [selected, setSelected] = useState(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
+  const importRef = useRef();
 
   const params = { search: search || undefined, type: typeF !== 'all' ? typeF : undefined, status: statusF !== 'all' ? statusF : undefined, limit: 100 };
   const { data, isLoading } = useQuery({ queryKey: ['wines', params], queryFn: () => winesAPI.list(params).then(r => r.data) });
@@ -266,6 +366,52 @@ export default function WinesPage() {
   const toggleDrunk = useMutation({
     mutationFn: ({ id, is_drunk, quantity }) => { const fd = new FormData(); fd.append('is_drunk', !is_drunk ? 1 : 0); if (!is_drunk) fd.append('quantity', 0); else fd.append('quantity', 1); return winesAPI.update(id, fd); },
     onSuccess: () => { qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']); },
+  });
+
+  const handleExport = async () => {
+    try {
+      const resp = await winesAPI.exportCsv();
+      const url = URL.createObjectURL(resp.data);
+      const a = document.createElement('a');
+      a.href = url; a.download = `cave-vigne-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click(); URL.revokeObjectURL(url);
+    } catch { toast.error('Erreur export'); }
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    try {
+      const r = await winesAPI.importCsv(file);
+      qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']);
+      toast.success(`${r.data.inserted} vin(s) importé(s)${r.data.skipped ? `, ${r.data.skipped} ignoré(s)` : ''}`);
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur import'); }
+    e.target.value = '';
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selected.size || !window.confirm(`Supprimer ${selected.size} vin(s) ?`)) return;
+    await Promise.all([...selected].map(id => winesAPI.remove(id)));
+    qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']);
+    setSelected(new Set()); setBulkMode(false);
+    toast.success(`${selected.size} vin(s) supprimé(s)`);
+  };
+
+  const handleBulkDrunk = async () => {
+    if (!selected.size) return;
+    const fns = [...selected].map(id => {
+      const fd = new FormData(); fd.append('is_drunk', 1); fd.append('quantity', 0);
+      return winesAPI.update(id, fd);
+    });
+    await Promise.all(fns);
+    qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']);
+    setSelected(new Set()); setBulkMode(false);
+    toast.success(`${selected.size} vin(s) marqué(s) comme bus`);
+  };
+
+  const toggleSelect = (id) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
   });
 
   const wines = data?.wines || [];
@@ -295,10 +441,23 @@ export default function WinesPage() {
               <option value="drunk">Dégustées</option>
             </select>
           </div>
-          <div className="col-12 col-md-4 d-flex justify-content-md-end gap-2">
+          <div className="col-12 col-md-4 d-flex justify-content-md-end gap-2 flex-wrap">
             <span style={{ fontSize: '0.78rem', color: 'var(--cv-text2)', alignSelf: 'center' }}>{total} résultat{total > 1 ? 's' : ''}</span>
-            <button className="btn btn-gold btn-sm ms-auto" onClick={() => setModal({ mode: 'add' })}>
-              <i className="bi bi-plus me-1"></i>Ajouter un vin
+            <div className="dropdown">
+              <button className="btn btn-outline-gold btn-sm dropdown-toggle" data-bs-toggle="dropdown" title="CSV">
+                <i className="bi bi-table me-1"></i>CSV
+              </button>
+              <ul className="dropdown-menu dropdown-menu-end">
+                <li><button className="dropdown-item" onClick={handleExport}><i className="bi bi-download me-2"></i>Exporter (.csv)</button></li>
+                <li><button className="dropdown-item" onClick={() => importRef.current?.click()}><i className="bi bi-upload me-2"></i>Importer (.csv)</button></li>
+              </ul>
+            </div>
+            <input ref={importRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImport} />
+            <button className={`btn btn-sm ${bulkMode ? 'btn-gold' : 'btn-outline-gold'}`} onClick={() => { setBulkMode(v => !v); setSelected(new Set()); }} title="Sélection multiple">
+              <i className="bi bi-check2-square"></i>
+            </button>
+            <button className="btn btn-gold btn-sm" onClick={() => setModal({ mode: 'add' })}>
+              <i className="bi bi-plus me-1"></i>Ajouter
             </button>
           </div>
         </div>
@@ -315,6 +474,16 @@ export default function WinesPage() {
         <button className={`filter-pill ${statusF === 'drunk' ? 'active' : ''}`} onClick={() => setStatusF(s => s === 'drunk' ? 'all' : 'drunk')}>Dégustées</button>
       </div>
 
+      {/* Bulk action bar */}
+      {bulkMode && selected.size > 0 && (
+        <div className="d-flex align-items-center gap-2 mb-3 p-2" style={{ background: 'var(--cv-bg3)', borderRadius: 8, border: '1px solid var(--cv-border)' }}>
+          <span style={{ fontSize: '0.82rem', color: 'var(--cv-gold)' }}>{selected.size} sélectionné(s)</span>
+          <button className="btn btn-sm btn-outline-gold" onClick={() => setSelected(new Set(wines.map(w => w.id)))}>Tout sélectionner</button>
+          <button className="btn btn-sm btn-wine" onClick={handleBulkDrunk}><i className="bi bi-check-circle me-1"></i>Marquer bus</button>
+          <button className="btn btn-sm btn-outline-secondary ms-auto" style={{ color: '#dc3545', borderColor: '#dc3545' }} onClick={handleBulkDelete}><i className="bi bi-trash me-1"></i>Supprimer</button>
+        </div>
+      )}
+
       {/* List */}
       {isLoading ? (
         <div className="text-center p-5"><div className="spinner-border" style={{ color: 'var(--cv-gold)' }} /></div>
@@ -328,7 +497,10 @@ export default function WinesPage() {
         <div className="row g-2">
           {wines.map(w => (
             <div className="col-12 col-lg-6" key={w.id}>
-              <div className="item-card">
+              <div className="item-card" style={{ background: bulkMode && selected.has(w.id) ? 'var(--cv-bg3)' : undefined }}>
+                {bulkMode && (
+                  <input type="checkbox" className="form-check-input me-1" checked={selected.has(w.id)} onChange={() => toggleSelect(w.id)} style={{ cursor: 'pointer', flexShrink: 0 }} />
+                )}
                 <span className="item-icon">{TYPE_ICONS[w.type] || '🍷'}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="item-name">{w.name}</div>
