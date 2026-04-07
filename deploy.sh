@@ -72,9 +72,8 @@ if [[ "$UPDATE_MODE" == "true" ]]; then
   cd "${SCRIPT_DIR}/frontend"
   # Supprimer .env.local (priorité CRA > .env.production) pour éviter localhost dans le build
   rm -f .env.local
-  # Reconstruire .env.production à partir du .env backend
-  PROTO_UPDATE=$(grep "^ALLOWED_ORIGINS=" "${APP_DIR}/backend/.env" | head -1 | grep -o 'https\?' | head -1 || echo "http")
-  echo "REACT_APP_API_URL=${PROTO_UPDATE}://${DOMAIN}/api" > .env.production
+  # URL relative : pas de mixed-content, marche en HTTP et HTTPS
+  echo "REACT_APP_API_URL=/api" > .env.production
   npm install --quiet
   npm run build
   cp -r build/. "${APP_DIR}/frontend/build/"
@@ -439,8 +438,10 @@ success "Dépendances backend installées + migration DB"
 cd "${SCRIPT_DIR}/frontend"
 # Supprimer .env.local (priorité CRA > .env.production) pour éviter localhost dans le build
 rm -f .env.local
+# URL relative /api : fonctionne en HTTP et HTTPS (nginx proxifie vers :3001)
+# Pas de mixed-content en cas de HAProxy TLS devant nginx HTTP
 cat > .env.production <<FENV
-REACT_APP_API_URL=${PROTO}://${DOMAIN}/api
+REACT_APP_API_URL=/api
 FENV
 npm install --quiet
 npm run build
