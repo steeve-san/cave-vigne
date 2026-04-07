@@ -1,5 +1,5 @@
 // src/pages/AdminPage.jsx
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminAPI } from '../services/api';
 import { useLang } from '../context/LangContext';
@@ -16,9 +16,139 @@ function RoleBadge({ role, t }) {
   );
 }
 
+// ─── Onglet Paramètres ────────────────────────────────────────────────────────
+function SettingsTab() {
+  const { t } = useLang();
+  const qc = useQueryClient();
+  const [vals, setVals] = useState({});
+  const [testingSmtp, setTestingSmtp] = useState(false);
+
+  const { data: settings = [], isLoading } = useQuery({
+    queryKey: ['admin-settings'],
+    queryFn: () => adminAPI.getSettings().then(r => r.data),
+    onSuccess: (data) => {
+      const init = {};
+      data.forEach(s => { init[s.setting_key] = s.setting_value === '***set***' ? '' : (s.setting_value || ''); });
+      setVals(init);
+    },
+  });
+
+  const saveMut = useMutation({
+    mutationFn: (data) => adminAPI.saveSettings(data),
+    onSuccess: () => { toast.success('Paramètres enregistrés'); qc.invalidateQueries(['admin-settings']); },
+    onError: (e) => toast.error(e.response?.data?.error || 'Erreur'),
+  });
+
+  const testSmtp = async () => {
+    setTestingSmtp(true);
+    try {
+      const r = await adminAPI.testSmtp();
+      toast.success(r.data.message);
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erreur SMTP');
+    } finally { setTestingSmtp(false); }
+  };
+
+  const get = (k) => vals[k] ?? '';
+  const set = (k) => (e) => setVals(v => ({ ...v, [k]: e.target.type === 'checkbox' ? (e.target.checked ? '1' : '0') : e.target.value }));
+
+  const isSet = (key) => settings.find(s => s.setting_key === key)?.is_set;
+
+  if (isLoading) return <div className="text-center py-5"><div className="spinner-border" style={{ color: 'var(--cv-gold)' }} /></div>;
+
+  return (
+    <div className="row g-4">
+      {/* API Keys */}
+      <div className="col-12">
+        <div className="card">
+          <div className="card-header"><h6 className="card-title mb-0"><i className="bi bi-key me-2"></i>{t('admin.settings.apiKeys')}</h6></div>
+          <div className="card-body">
+            <div className="row g-3">
+              <div className="col-12">
+                <label className="form-label">{t('admin.settings.anthropicKey')}</label>
+                <div className="d-flex gap-2">
+                  <input className="form-control" type="password"
+                    placeholder={isSet('anthropic_key') ? `••••••••••• (${t('admin.settings.configured')})` : 'sk-ant-...'}
+                    value={get('anthropic_key')} onChange={set('anthropic_key')} />
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginTop: 4 }}>
+                  {t('admin.settings.anthropicHint')}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Catalogue public */}
+      <div className="col-12">
+        <div className="card">
+          <div className="card-header"><h6 className="card-title mb-0"><i className="bi bi-globe me-2"></i>{t('admin.settings.publicAccess')}</h6></div>
+          <div className="card-body">
+            <div className="form-check form-switch">
+              <input className="form-check-input" type="checkbox" id="publicCatalog"
+                checked={get('public_catalog') === '1'} onChange={set('public_catalog')} />
+              <label className="form-check-label" htmlFor="publicCatalog" style={{ fontSize: '0.85rem' }}>
+                {t('admin.settings.publicCatalog')}
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* SMTP */}
+      <div className="col-12">
+        <div className="card">
+          <div className="card-header"><h6 className="card-title mb-0"><i className="bi bi-envelope me-2"></i>{t('admin.settings.smtp')}</h6></div>
+          <div className="card-body">
+            <div className="row g-3">
+              <div className="col-md-8"><label className="form-label">{t('admin.settings.smtpHost')}</label>
+                <input className="form-control" placeholder="smtp.gmail.com" value={get('smtp_host')} onChange={set('smtp_host')} /></div>
+              <div className="col-md-4"><label className="form-label">{t('admin.settings.smtpPort')}</label>
+                <input className="form-control" placeholder="587" value={get('smtp_port')} onChange={set('smtp_port')} /></div>
+              <div className="col-md-6"><label className="form-label">{t('admin.settings.smtpUser')}</label>
+                <input className="form-control" placeholder="user@gmail.com" value={get('smtp_user')} onChange={set('smtp_user')} /></div>
+              <div className="col-md-6"><label className="form-label">{t('admin.settings.smtpPass')}</label>
+                <input className="form-control" type="password"
+                  placeholder={isSet('smtp_pass') ? `••••••••• (${t('admin.settings.configured')})` : ''}
+                  value={get('smtp_pass')} onChange={set('smtp_pass')} /></div>
+              <div className="col-md-8"><label className="form-label">{t('admin.settings.smtpFrom')}</label>
+                <input className="form-control" placeholder="Cave & Vigne <noreply@votre-domaine.fr>" value={get('smtp_from')} onChange={set('smtp_from')} /></div>
+              <div className="col-md-4 d-flex align-items-end">
+                <div className="form-check form-switch">
+                  <input className="form-check-input" type="checkbox" id="smtpTls"
+                    checked={get('smtp_secure') === '1'} onChange={set('smtp_secure')} />
+                  <label className="form-check-label" htmlFor="smtpTls" style={{ fontSize: '0.8rem' }}>{t('admin.settings.smtpTls')}</label>
+                </div>
+              </div>
+            </div>
+            <div className="mt-3">
+              <button className="btn btn-sm btn-outline-gold me-2" onClick={testSmtp} disabled={testingSmtp || !get('smtp_host')}>
+                {testingSmtp ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-send me-1"></i>}
+                {t('admin.settings.testSmtp')}
+              </button>
+              <span style={{ fontSize: '0.72rem', color: 'var(--cv-text3)' }}>{t('admin.settings.testSmtpHint')}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bouton save */}
+      <div className="col-12 d-flex justify-content-end">
+        <button className="btn btn-gold" onClick={() => saveMut.mutate(vals)} disabled={saveMut.isPending}>
+          {saveMut.isPending ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-check2 me-1"></i>}
+          {t('admin.settings.save')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page principale ──────────────────────────────────────────────────────────
 export default function AdminPage() {
   const { t } = useLang();
   const qc = useQueryClient();
+  const [activeTab, setActiveTab] = useState('users');
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [form, setForm] = useState({ email: '', username: '', password: '', role: 'user' });
@@ -59,17 +189,39 @@ export default function AdminPage() {
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString() : '—';
 
+  const tabStyle = (active) => ({
+    background: 'none', border: 'none', padding: '8px 18px', cursor: 'pointer',
+    color: active ? 'var(--cv-gold)' : 'var(--cv-text2)',
+    borderBottom: active ? '2px solid var(--cv-gold)' : '2px solid transparent',
+    fontSize: '0.88rem', fontWeight: active ? 600 : 400,
+  });
+
   return (
     <div className="fade-in">
-      <div className="d-flex align-items-center justify-content-between mb-4">
+      <div className="d-flex align-items-center justify-content-between mb-3">
         <h2 className="font-serif mb-0" style={{ color: 'var(--cv-gold)', fontSize: '1.6rem' }}>
           {t('admin.title')}
         </h2>
-        <button className="btn btn-wine btn-sm" onClick={() => setShowModal(true)}>
-          <i className="bi bi-person-plus me-1"></i>{t('admin.createUser')}
+        {activeTab === 'users' && (
+          <button className="btn btn-wine btn-sm" onClick={() => setShowModal(true)}>
+            <i className="bi bi-person-plus me-1"></i>{t('admin.createUser')}
+          </button>
+        )}
+      </div>
+
+      {/* Onglets */}
+      <div style={{ borderBottom: '1px solid var(--cv-border)', marginBottom: '1.5rem' }}>
+        <button style={tabStyle(activeTab === 'users')} onClick={() => setActiveTab('users')}>
+          <i className="bi bi-people me-1"></i>{t('admin.tabUsers')}
+        </button>
+        <button style={tabStyle(activeTab === 'settings')} onClick={() => setActiveTab('settings')}>
+          <i className="bi bi-gear me-1"></i>{t('admin.tabSettings')}
         </button>
       </div>
 
+      {activeTab === 'settings' && <SettingsTab />}
+
+      {activeTab === 'users' && <>
       {/* Stats rapides */}
       <div className="row g-3 mb-4">
         {ROLES.map(role => {
@@ -198,6 +350,8 @@ export default function AdminPage() {
           </div>
         ))}
       </div>
+
+      </>}
 
       {/* Modal création utilisateur */}
       {showModal && (

@@ -3,7 +3,7 @@ const router = require('express').Router();
 const { body, validationResult } = require('express-validator');
 const db = require('../config/db');
 const auth = require('../middleware/auth');
-const { requireRole } = require('../middleware/auth');
+const { requireRole, optionalAuth } = require('../middleware/auth');
 const { cacheGet, cacheSet, cacheDel } = require('../config/redis');
 const multer = require('multer');
 const path = require('path');
@@ -19,12 +19,21 @@ const upload = multer({
     cb(null, allowed.includes(path.extname(file.originalname).toLowerCase()));
   }
 });
+const uploadFields = upload.fields([{ name: 'label', maxCount: 1 }, { name: 'bottle_photo', maxCount: 1 }]);
+
+async function saveImage(buffer, prefix, userId) {
+  const dir = process.env.UPLOAD_DIR || './uploads';
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const filename = `${prefix}_${userId}_${Date.now()}.webp`;
+  await sharp(buffer).resize(1200, 1200, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 85 }).toFile(path.join(dir, filename));
+  return `/uploads/${filename}`;
+}
 
 // ─── GET /api/wines ───────────────────────────────────────────────────────────
-// visiteur/admin → tous les vins ; user → ses propres vins
-router.get('/', auth, async (req, res) => {
+// visiteur/admin → tous les vins ; user → ses propres vins ; non-auth → catalogue public
+router.get('/', optionalAuth, async (req, res) => {
   const { search, type, status, region, page = 1, limit = 50, sort = 'created_at', order = 'DESC' } = req.query;
-  const role = req.user.role;
+  const role = req.user?.role || 'guest';
   const cacheKey = `wines:${role === 'user' ? req.user.id : 'all'}:${JSON.stringify(req.query)}`;
   const cached = await cacheGet(cacheKey);
   if (cached) return res.json(cached);
@@ -33,10 +42,18 @@ router.get('/', auth, async (req, res) => {
     let where = [];
     let params = [];
 
-    // Filtre user_id uniquement pour le rôle 'user'
+    // Filtre selon le rôle
     if (role === 'user') {
       where.push('w.user_id = ?');
       params.push(req.user.id);
+    } else if (role === 'guest') {
+      // Catalogue public : vérifier que le catalogue public est activé
+      const [cfg] = await db.query(
+        `SELECT setting_value FROM system_settings WHERE setting_key = 'public_catalog'`
+      );
+      if (!cfg[0] || cfg[0].setting_value !== '1') {
+        return res.status(401).json({ error: 'Authentification requise', code: 'TOKEN_MISSING' });
+      }
     }
 
     if (search) {
@@ -90,24 +107,23 @@ router.get('/', auth, async (req, res) => {
 });
 
 // ─── POST /api/wines — visiteur interdit ─────────────────────────────────────
-router.post('/', auth, requireRole('user', 'admin'), upload.single('label'), async (req, res) => {
-  const { name, appellation, vintage, type, producer, region, grapes, country, quantity, position, price, keep_until, notes } = req.body;
+router.post('/', auth, requireRole('user', 'admin'), uploadFields, async (req, res) => {
+  const { name, appellation, vintage, type, producer, region, grapes, country, quantity, position, price, keep_until, notes,
+          domain_website, domain_description, soil_type, altitude } = req.body;
   if (!name || !type) return res.status(400).json({ error: 'Nom et type requis' });
 
   try {
-    let labelUrl = null;
-    if (req.file) {
-      const dir = process.env.UPLOAD_DIR || './uploads';
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      const filename = `label_${req.user.id}_${Date.now()}.webp`;
-      await sharp(req.file.buffer).resize(800, 800, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 85 }).toFile(path.join(dir, filename));
-      labelUrl = `/uploads/${filename}`;
-    }
+    const labelFile = req.files?.label?.[0];
+    const bottleFile = req.files?.bottle_photo?.[0];
+    const labelUrl  = labelFile  ? await saveImage(labelFile.buffer,  'label',  req.user.id) : null;
+    const bottleUrl = bottleFile ? await saveImage(bottleFile.buffer, 'bottle', req.user.id) : null;
+
     const [result] = await db.query(
-      `INSERT INTO wines (user_id,name,appellation,vintage,type,producer,region,grapes,country,quantity,position,price,keep_until,notes,label_image)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO wines (user_id,name,appellation,vintage,type,producer,region,grapes,country,quantity,position,price,keep_until,notes,label_image,bottle_photo,domain_website,domain_description,soil_type,altitude)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [req.user.id, name, appellation||null, vintage||null, type, producer||null, region||null, grapes||null,
-       country||'France', quantity||1, position||null, price||null, keep_until||null, notes||null, labelUrl]
+       country||'France', quantity||1, position||null, price||null, keep_until||null, notes||null,
+       labelUrl, bottleUrl, domain_website||null, domain_description||null, soil_type||null, altitude||null]
     );
     await cacheDel(`wines:${req.user.id}:*`);
     await cacheDel('wines:all:*');
@@ -117,27 +133,25 @@ router.post('/', auth, requireRole('user', 'admin'), upload.single('label'), asy
 });
 
 // ─── PUT /api/wines/:id — visiteur interdit ───────────────────────────────────
-router.put('/:id', auth, requireRole('user', 'admin'), upload.single('label'), async (req, res) => {
+router.put('/:id', auth, requireRole('user', 'admin'), uploadFields, async (req, res) => {
   const { id } = req.params;
   const isAdmin = req.user.role === 'admin';
   try {
-    // Admin peut modifier tous les vins, user uniquement les siens
     const condition = isAdmin ? 'id = ?' : 'id = ? AND user_id = ?';
     const condParams = isAdmin ? [id] : [id, req.user.id];
     const [rows] = await db.query(`SELECT id, user_id FROM wines WHERE ${condition}`, condParams);
     if (!rows.length) return res.status(404).json({ error: 'Vin introuvable' });
 
-    const fields = ['name','appellation','vintage','type','producer','region','grapes','country','quantity','position','price','keep_until','notes','is_drunk'];
+    const fields = ['name','appellation','vintage','type','producer','region','grapes','country','quantity','position',
+                    'price','keep_until','notes','is_drunk','domain_website','domain_description','soil_type','altitude'];
     const updates = []; const params = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f} = ?`); params.push(req.body[f]); } });
 
-    if (req.file) {
-      const dir = process.env.UPLOAD_DIR || './uploads';
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      const filename = `label_${req.user.id}_${Date.now()}.webp`;
-      await sharp(req.file.buffer).resize(800, 800, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 85 }).toFile(path.join(dir, filename));
-      updates.push('label_image = ?'); params.push(`/uploads/${filename}`);
-    }
+    const labelFile  = req.files?.label?.[0];
+    const bottleFile = req.files?.bottle_photo?.[0];
+    if (labelFile)  { updates.push('label_image = ?');  params.push(await saveImage(labelFile.buffer,  'label',  req.user.id)); }
+    if (bottleFile) { updates.push('bottle_photo = ?'); params.push(await saveImage(bottleFile.buffer, 'bottle', req.user.id)); }
+
     if (!updates.length) return res.status(400).json({ error: 'Rien à modifier' });
     params.push(id);
     await db.query(`UPDATE wines SET ${updates.join(', ')} WHERE id = ?`, params);
@@ -221,6 +235,36 @@ router.get('/stats', auth, async (req, res) => {
     await cacheSet(cacheKey, result, 120);
     res.json(result);
   } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+// ─── GET /api/wines/:id/enrich — enrichissement depuis sources externes ────────
+// Open Food Facts (gratuit, sans clé) + Wine-Searcher si configuré
+router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) => {
+  try {
+    const [wines] = await db.query('SELECT * FROM wines WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+    if (!wines.length) return res.status(404).json({ error: 'Vin introuvable' });
+    const wine = wines[0];
+    const q = encodeURIComponent(wine.name + (wine.producer ? ' ' + wine.producer : ''));
+
+    // Open Food Facts
+    const offUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${q}&categories_tags=wines&action=process&json=1&page_size=3&fields=product_name,origins,countries,brands,categories,image_url,ingredients_text`;
+    const response = await fetch(offUrl, { signal: AbortSignal.timeout(8000) });
+    const data = response.ok ? await response.json() : { products: [] };
+    const products = (data.products || []).map(p => ({
+      source:       'Open Food Facts',
+      name:         p.product_name || '',
+      producer:     p.brands || '',
+      country:      p.countries || '',
+      grapes:       p.ingredients_text || '',
+      label_image:  p.image_url || '',
+      origins:      p.origins || '',
+    })).filter(p => p.name);
+
+    res.json({ results: products, query: wine.name });
+  } catch (err) {
+    console.error('[enrich]', err.message);
+    res.json({ results: [], query: '', error: err.message });
+  }
 });
 
 module.exports = router;

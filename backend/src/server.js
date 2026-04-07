@@ -42,10 +42,11 @@ app.use('/uploads', express.static(process.env.UPLOAD_DIR || path.join(__dirname
 }));
 
 // Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/wines', require('./routes/wines'));
-app.use('/api/spirits', require('./routes/spirits'));
-app.use('/api/sommelier', require('./routes/sommelier'));
+app.use('/api/auth',     require('./routes/auth'));
+app.use('/api/wines',    require('./routes/wines'));
+app.use('/api/spirits',  require('./routes/spirits'));
+app.use('/api/sommelier',require('./routes/sommelier'));
+app.use('/api/settings', require('./routes/settings'));
 
 // Health check — public, teste vraiment la DB
 app.get('/api/health', async (_req, res) => {

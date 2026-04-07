@@ -6,6 +6,8 @@ const { body, validationResult } = require('express-validator');
 const db = require('../config/db');
 const auth = require('../middleware/auth');
 const { requireRole } = require('../middleware/auth');
+const speakeasy = require('speakeasy');
+const qrcode = require('qrcode');
 
 const genTokens = (userId) => {
   const access  = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
@@ -66,6 +68,17 @@ router.post('/login', [
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Identifiants invalides' });
 
+    // Vérification 2FA TOTP si activé
+    if (user.totp_enabled) {
+      const { totp_code } = req.body;
+      if (!totp_code) return res.status(200).json({ requires_totp: true });
+      const ok = speakeasy.totp.verify({
+        secret: user.totp_secret, encoding: 'base32',
+        token: totp_code, window: 1,
+      });
+      if (!ok) return res.status(401).json({ error: 'Code 2FA invalide' });
+    }
+
     await db.query('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
     const tokens = genTokens(user.id);
     const expiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1000);
@@ -73,7 +86,7 @@ router.post('/login', [
       [user.id, tokens.refresh, expiresAt]);
 
     res.json({
-      user: { id: user.id, email: user.email, username: user.username, avatar_url: user.avatar_url, role: user.role },
+      user: { id: user.id, email: user.email, username: user.username, avatar_url: user.avatar_url, role: user.role, totp_enabled: !!user.totp_enabled },
       ...tokens
     });
   } catch (err) {
@@ -116,6 +129,51 @@ router.post('/logout', auth, async (req, res) => {
 // ─── GET /api/auth/me ─────────────────────────────────────────────────────────
 router.get('/me', auth, (req, res) => {
   res.json({ user: req.user });
+});
+
+// ─── 2FA TOTP ─────────────────────────────────────────────────────────────────
+// POST /api/auth/totp/setup — génère un secret + QR code
+router.post('/totp/setup', auth, async (req, res) => {
+  try {
+    const secret = speakeasy.generateSecret({ name: `Cave & Vigne (${req.user.email})`, length: 20 });
+    // Stocke temporairement le secret (non encore activé)
+    await db.query('UPDATE users SET totp_secret = ? WHERE id = ?', [secret.base32, req.user.id]);
+    const qr = await qrcode.toDataURL(secret.otpauth_url);
+    res.json({ secret: secret.base32, qr_code: qr, otpauth_url: secret.otpauth_url });
+  } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+// POST /api/auth/totp/confirm — confirme le code TOTP et active le 2FA
+router.post('/totp/confirm', auth, async (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Code requis' });
+  try {
+    const [rows] = await db.query('SELECT totp_secret FROM users WHERE id = ?', [req.user.id]);
+    if (!rows[0]?.totp_secret) return res.status(400).json({ error: 'Setup 2FA non initialisé' });
+    const ok = speakeasy.totp.verify({ secret: rows[0].totp_secret, encoding: 'base32', token, window: 1 });
+    if (!ok) return res.status(400).json({ error: 'Code invalide — réessayez' });
+    await db.query('UPDATE users SET totp_enabled = TRUE WHERE id = ?', [req.user.id]);
+    res.json({ message: '2FA activé avec succès' });
+  } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+// POST /api/auth/totp/disable — désactive le 2FA
+router.post('/totp/disable', auth, async (req, res) => {
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: 'Mot de passe requis' });
+  try {
+    const [rows] = await db.query('SELECT password_hash FROM users WHERE id = ?', [req.user.id]);
+    const valid = await bcrypt.compare(password, rows[0].password_hash);
+    if (!valid) return res.status(401).json({ error: 'Mot de passe incorrect' });
+    await db.query('UPDATE users SET totp_enabled = FALSE, totp_secret = NULL WHERE id = ?', [req.user.id]);
+    res.json({ message: '2FA désactivé' });
+  } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+// GET /api/auth/totp/status
+router.get('/totp/status', auth, async (req, res) => {
+  const [rows] = await db.query('SELECT totp_enabled FROM users WHERE id = ?', [req.user.id]);
+  res.json({ totp_enabled: !!rows[0]?.totp_enabled });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

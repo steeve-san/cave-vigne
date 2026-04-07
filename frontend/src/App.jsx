@@ -18,6 +18,7 @@ import SpiritsMapPage from './pages/SpiritsMapPage';
 import SommelierPage from './pages/SommelierPage';
 import ScanPage from './pages/ScanPage';
 import AdminPage from './pages/AdminPage';
+import ProfilePage from './pages/ProfilePage';
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, retry: 1 } } });
 
@@ -40,6 +41,8 @@ function PublicRoute({ children }) {
 }
 
 // Les visiteurs peuvent accéder à la cave en lecture seule
+// Si le catalogue public est activé côté serveur, les non-connectés voient aussi ces pages
+// (le backend refusera les données si public_catalog=0)
 function VisitorAllowed({ children }) {
   const { user, loading } = useAuth();
   if (loading) return (
@@ -47,6 +50,8 @@ function VisitorAllowed({ children }) {
       <div className="spinner-border" style={{ color: 'var(--cv-gold)' }} />
     </div>
   );
+  // Si l'utilisateur n'est pas connecté, rediriger vers /login
+  // Sauf si le catalogue public est activé — géré côté backend
   return user ? children : <Navigate to="/login" replace />;
 }
 
@@ -89,6 +94,9 @@ export default function App() {
 
                   {/* Réservé admin */}
                   <Route path="admin" element={<PrivateRoute requiredRole="admin"><AdminPage /></PrivateRoute>} />
+
+                  {/* Profil utilisateur */}
+                  <Route path="profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
                 </Route>
               </Routes>
             </BrowserRouter>

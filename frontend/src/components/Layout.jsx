@@ -124,6 +124,11 @@ export default function Layout() {
             <i className="bi bi-eye me-1"></i>Lecture seule
           </div>
         )}
+        <div className="d-flex gap-2 mb-2">
+          <NavLink to="/profile" className="btn btn-sm btn-outline-gold flex-grow-1" style={{ fontSize: '0.78rem' }}>
+            <i className="bi bi-person-gear me-1"></i>{t('nav.profile')}
+          </NavLink>
+        </div>
         <button className="btn btn-sm btn-outline-gold w-100" onClick={handleLogout}>
           <i className="bi bi-box-arrow-right me-1"></i>{t('auth.logout')}
         </button>

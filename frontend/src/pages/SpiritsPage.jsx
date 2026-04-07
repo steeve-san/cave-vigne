@@ -1,62 +1,134 @@
 // src/pages/SpiritsPage.jsx
-import React, { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { spiritsAPI } from '../services/api';
+import { useLang } from '../context/LangContext';
 import toast from 'react-hot-toast';
 
 const SPIRIT_TYPES = ['whisky','rhum','cognac','armagnac','calvados','gin','vodka','autre'];
 const TYPE_ICONS = { whisky:'🥃', rhum:'🍹', cognac:'🥃', armagnac:'🥃', calvados:'🍎', gin:'🍸', vodka:'🍸', autre:'🍶' };
-const EMPTY = { name:'', type:'whisky', producer:'', origin:'', age:'', abv:'', status:'stock', price:'', rating:'', quantity:1, notes:'' };
+const EMPTY = { name:'', type:'whisky', producer:'', origin:'', age:'', abv:'', status:'stock', price:'', rating:'', quantity:1, notes:'', domain_website:'', domain_description:'' };
+
+function PhotoPicker({ label, current, onChange, t }) {
+  const ref = useRef();
+  const [preview, setPreview] = useState(current || null);
+  const handleFile = e => {
+    const f = e.target.files[0]; if (!f) return;
+    onChange(f);
+    const r = new FileReader(); r.onload = ev => setPreview(ev.target.result); r.readAsDataURL(f);
+  };
+  const API_BASE = process.env.REACT_APP_API_URL?.replace('/api','') || '';
+  const src = preview?.startsWith('data:') ? preview : preview ? `${API_BASE}${preview}` : null;
+  return (
+    <div>
+      <label className="form-label">{label}</label>
+      {src && <img src={src} alt={label} style={{ width:'100%', maxHeight:180, objectFit:'contain', borderRadius:8, marginBottom:8, background:'#1a0f0f' }} />}
+      <div className="d-flex gap-2">
+        <button type="button" className="btn btn-sm btn-outline-gold" onClick={() => ref.current.click()}>
+          <i className="bi bi-image me-1"></i>{src ? t('wines.changePhoto') : t('wines.choosePhoto')}
+        </button>
+        {src && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setPreview(null); onChange(null); }}>{t('wines.removePhoto')}</button>}
+      </div>
+      <input ref={ref} type="file" accept="image/*" style={{ display:'none' }} onChange={handleFile} />
+    </div>
+  );
+}
 
 function SpiritModal({ spirit, onClose, onSave }) {
+  const { t } = useLang();
+  const [tab, setTab] = useState('spirit');
   const [form, setForm] = useState(spirit ? { ...EMPTY, ...spirit } : { ...EMPTY });
+  const [labelFile,  setLabelFile]  = useState(null);
+  const [bottleFile, setBottleFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
   const handleSubmit = async e => {
     e.preventDefault(); setLoading(true);
-    try { await onSave(form); onClose(); }
-    catch (err) { toast.error(err.response?.data?.error || 'Erreur'); }
+    try {
+      const fd = new FormData();
+      Object.entries(form).forEach(([k,v]) => { if (v !== '' && v !== null && v !== undefined) fd.append(k, v); });
+      if (labelFile)  fd.append('label',       labelFile);
+      if (bottleFile) fd.append('bottle_photo', bottleFile);
+      await onSave(fd); onClose();
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur'); }
     finally { setLoading(false); }
   };
+
+  const tabStyle = active => ({
+    background:'none', border:'none', padding:'8px 16px', cursor:'pointer',
+    color: active ? 'var(--cv-gold)' : 'var(--cv-text2)',
+    borderBottom: active ? '2px solid var(--cv-gold)' : '2px solid transparent',
+    fontSize:'0.85rem', fontWeight: active ? 600 : 400,
+  });
+
   return (
     <div className="modal show d-block" style={{ background:'rgba(0,0,0,0.7)' }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div className="modal-content">
-          <div className="modal-header">
-            <h5 className="modal-title">{spirit ? 'Modifier' : 'Ajouter un spiritueux'}</h5>
-            <button className="btn-close" onClick={onClose} />
+          <div className="modal-header" style={{ paddingBottom:0, flexDirection:'column', alignItems:'flex-start' }}>
+            <div className="d-flex justify-content-between w-100 mb-2">
+              <h5 className="modal-title">{spirit ? 'Modifier' : 'Ajouter un spiritueux'}</h5>
+              <button className="btn-close" onClick={onClose} />
+            </div>
+            <div style={{ borderBottom:'1px solid var(--cv-border)', width:'100%' }}>
+              {[['spirit', t('spirits.tabSpirit')], ['distillerie', t('spirits.tabDistillery')], ['photos', t('spirits.tabPhotos')]].map(([key, label]) => (
+                <button key={key} type="button" style={tabStyle(tab === key)} onClick={() => setTab(key)}>
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           <form onSubmit={handleSubmit}>
             <div className="modal-body">
-              <div className="row g-3">
-                <div className="col-md-8"><label className="form-label">Nom *</label><input className="form-control" required value={form.name} onChange={set('name')} placeholder="Glenfarclas 25 ans" /></div>
-                <div className="col-md-4"><label className="form-label">Type *</label>
-                  <select className="form-select" value={form.type} onChange={set('type')}>
-                    {SPIRIT_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-                  </select>
+
+              {tab === 'spirit' && (
+                <div className="row g-3">
+                  <div className="col-md-8"><label className="form-label">{t('spirits.name')} *</label><input className="form-control" required value={form.name} onChange={set('name')} placeholder="Glenfarclas 25 ans" /></div>
+                  <div className="col-md-4"><label className="form-label">{t('common.type')} *</label>
+                    <select className="form-select" value={form.type} onChange={set('type')}>
+                      {SPIRIT_TYPES.map(tp => <option key={tp} value={tp}>{t(`spirits.type.${tp}`)}</option>)}
+                    </select>
+                  </div>
+                  <div className="col-md-6"><label className="form-label">{t('spirits.producer')}</label><input className="form-control" value={form.producer} onChange={set('producer')} placeholder="Glenfarclas Distillery" /></div>
+                  <div className="col-md-6"><label className="form-label">{t('spirits.origin')}</label><input className="form-control" value={form.origin} onChange={set('origin')} placeholder="Écosse, Speyside" /></div>
+                  <div className="col-md-4"><label className="form-label">{t('spirits.age')}</label><input className="form-control" value={form.age} onChange={set('age')} placeholder="25 ans ou 2008" /></div>
+                  <div className="col-md-4"><label className="form-label">{t('spirits.abv')}</label><input className="form-control" type="number" step="0.1" min="0" max="100" value={form.abv} onChange={set('abv')} placeholder="46" /></div>
+                  <div className="col-md-4"><label className="form-label">{t('common.status')}</label>
+                    <select className="form-select" value={form.status} onChange={set('status')}>
+                      <option value="stock">{t('spirits.status.stock')}</option>
+                      <option value="open">{t('spirits.status.open')}</option>
+                      <option value="empty">{t('spirits.status.empty')}</option>
+                    </select>
+                  </div>
+                  <div className="col-md-4"><label className="form-label">{t('spirits.price')}</label><input className="form-control" type="number" min="0" step="0.01" value={form.price} onChange={set('price')} /></div>
+                  <div className="col-md-4"><label className="form-label">{t('spirits.rating')}</label><input className="form-control" type="number" min="0" max="100" value={form.rating} onChange={set('rating')} placeholder="88" /></div>
+                  <div className="col-md-4"><label className="form-label">{t('spirits.quantity')}</label><input className="form-control" type="number" min="0" value={form.quantity} onChange={set('quantity')} /></div>
+                  <div className="col-12"><label className="form-label">{t('spirits.notes')}</label><textarea className="form-control" rows={3} value={form.notes} onChange={set('notes')} placeholder="Tourbé, vanille, fruits secs, épices..." /></div>
                 </div>
-                <div className="col-md-6"><label className="form-label">Distillerie / Producteur</label><input className="form-control" value={form.producer} onChange={set('producer')} placeholder="Glenfarclas Distillery" /></div>
-                <div className="col-md-6"><label className="form-label">Pays / Région d'origine</label><input className="form-control" value={form.origin} onChange={set('origin')} placeholder="Écosse, Speyside" /></div>
-                <div className="col-md-4"><label className="form-label">Âge / Millésime</label><input className="form-control" value={form.age} onChange={set('age')} placeholder="25 ans ou 2008" /></div>
-                <div className="col-md-4"><label className="form-label">Degré alcool (%)</label><input className="form-control" type="number" step="0.1" min="0" max="100" value={form.abv} onChange={set('abv')} placeholder="46" /></div>
-                <div className="col-md-4"><label className="form-label">Statut</label>
-                  <select className="form-select" value={form.status} onChange={set('status')}>
-                    <option value="stock">Non ouvert (stock)</option>
-                    <option value="open">Ouvert</option>
-                    <option value="empty">Terminé</option>
-                  </select>
+              )}
+
+              {tab === 'distillerie' && (
+                <div className="row g-3">
+                  <div className="col-12"><label className="form-label">{t('spirits.distilleryWebsite')}</label>
+                    <input className="form-control" value={form.domain_website} onChange={set('domain_website')} placeholder="https://www.glenfarclas.com" type="url" /></div>
+                  <div className="col-12"><label className="form-label">{t('spirits.distilleryDesc')}</label>
+                    <textarea className="form-control" rows={6} value={form.domain_description} onChange={set('domain_description')} placeholder="Histoire de la distillerie, méthodes de production..." /></div>
                 </div>
-                <div className="col-md-3"><label className="form-label">Prix €</label><input className="form-control" type="number" min="0" step="0.01" value={form.price} onChange={set('price')} /></div>
-                <div className="col-md-3"><label className="form-label">Note /100</label><input className="form-control" type="number" min="0" max="100" value={form.rating} onChange={set('rating')} placeholder="88" /></div>
-                <div className="col-md-3"><label className="form-label">Quantité</label><input className="form-control" type="number" min="0" value={form.quantity} onChange={set('quantity')} /></div>
-                <div className="col-12"><label className="form-label">Notes de dégustation</label><textarea className="form-control" rows={3} value={form.notes} onChange={set('notes')} placeholder="Tourbé, vanille, fruits secs, épices..." /></div>
-              </div>
+              )}
+
+              {tab === 'photos' && (
+                <div className="row g-4">
+                  <div className="col-md-6"><PhotoPicker label={t('spirits.labelPhoto')} current={spirit?.label_image} onChange={setLabelFile} t={t} /></div>
+                  <div className="col-md-6"><PhotoPicker label={t('spirits.bottlePhoto')} current={spirit?.bottle_photo} onChange={setBottleFile} t={t} /></div>
+                </div>
+              )}
             </div>
             <div className="modal-footer">
-              <button type="button" className="btn btn-outline-gold" onClick={onClose}>Annuler</button>
+              <button type="button" className="btn btn-outline-gold" onClick={onClose}>{t('common.cancel')}</button>
               <button type="submit" className="btn btn-gold" disabled={loading}>
                 {loading && <span className="spinner-border spinner-border-sm me-1" />}
-                {spirit ? 'Enregistrer' : 'Ajouter'}
+                {spirit ? t('common.save') : t('spirits.add')}
               </button>
             </div>
           </form>

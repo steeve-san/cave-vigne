@@ -60,6 +60,11 @@ async function migrate() {
       keep_until YEAR,
       notes TEXT,
       label_image VARCHAR(500),
+      bottle_photo VARCHAR(500),
+      domain_website VARCHAR(500),
+      domain_description TEXT,
+      soil_type VARCHAR(200),
+      altitude VARCHAR(100),
       is_drunk BOOLEAN DEFAULT FALSE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -97,6 +102,9 @@ async function migrate() {
       quantity INT DEFAULT 1,
       notes TEXT,
       label_image VARCHAR(500),
+      bottle_photo VARCHAR(500),
+      domain_website VARCHAR(500),
+      domain_description TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -113,17 +121,58 @@ async function migrate() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       INDEX idx_user (user_id)
     ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS system_settings (
+      setting_key VARCHAR(100) NOT NULL PRIMARY KEY,
+      setting_value TEXT,
+      setting_type ENUM('text','password','boolean','json') DEFAULT 'text',
+      label VARCHAR(255),
+      updated_by INT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB;
   `;
 
   await conn.query(schema);
 
-  // Mise à jour du schéma existant — ajoute visiteur si absent du ENUM
-  try {
-    await conn.query(`
-      ALTER TABLE users MODIFY COLUMN role ENUM('visiteur','user','admin') DEFAULT 'user';
-    `);
-  } catch {
-    // Déjà à jour
+  // Mise à jour du schéma existant (idempotent)
+  const alters = [
+    // Rôles utilisateur
+    `ALTER TABLE users MODIFY COLUMN role ENUM('visiteur','user','admin') DEFAULT 'user'`,
+    // 2FA TOTP
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret VARCHAR(100)`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN DEFAULT FALSE`,
+    // Domaine & photos vins
+    `ALTER TABLE wines ADD COLUMN IF NOT EXISTS bottle_photo VARCHAR(500)`,
+    `ALTER TABLE wines ADD COLUMN IF NOT EXISTS domain_website VARCHAR(500)`,
+    `ALTER TABLE wines ADD COLUMN IF NOT EXISTS domain_description TEXT`,
+    `ALTER TABLE wines ADD COLUMN IF NOT EXISTS soil_type VARCHAR(200)`,
+    `ALTER TABLE wines ADD COLUMN IF NOT EXISTS altitude VARCHAR(100)`,
+    // Domaine & photos spiritueux
+    `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS bottle_photo VARCHAR(500)`,
+    `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS domain_website VARCHAR(500)`,
+    `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS domain_description TEXT`,
+  ];
+  for (const sql of alters) {
+    try { await conn.query(sql); } catch { /* déjà à jour */ }
+  }
+
+  // Paramètres système par défaut
+  const defaults = [
+    ['smtp_host',    '',    'text',    'Serveur SMTP'],
+    ['smtp_port',    '587', 'text',    'Port SMTP'],
+    ['smtp_user',    '',    'text',    'Utilisateur SMTP'],
+    ['smtp_pass',    '',    'password','Mot de passe SMTP'],
+    ['smtp_from',    '',    'text',    'Adresse expéditeur'],
+    ['smtp_secure',  '0',   'boolean', 'TLS/SSL'],
+    ['anthropic_key','',    'password','Clé API Anthropic'],
+    ['public_catalog','0',  'boolean', 'Catalogue public (sans auth)'],
+    ['require_email_verify','0','boolean','Vérification email obligatoire'],
+  ];
+  for (const [key, val, type, label] of defaults) {
+    await conn.query(
+      `INSERT IGNORE INTO system_settings (setting_key, setting_value, setting_type, label) VALUES (?,?,?,?)`,
+      [key, val, type, label]
+    );
   }
 
   console.log('✅ Migration terminée avec succès');

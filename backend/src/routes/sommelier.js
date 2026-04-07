@@ -102,4 +102,28 @@ router.get('/history', auth, async (req, res) => {
   res.json(rows);
 });
 
+// GET /api/sommelier/recipes?food=NOM — suggestions recettes depuis TheMealDB (gratuit, sans clé)
+router.get('/recipes', auth, async (req, res) => {
+  const { food } = req.query;
+  if (!food) return res.status(400).json({ error: 'Paramètre food requis' });
+  try {
+    const url = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(food)}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const data = response.ok ? await response.json() : { meals: null };
+    const meals = (data.meals || []).slice(0, 6).map(m => ({
+      id:           m.idMeal,
+      name:         m.strMeal,
+      category:     m.strCategory,
+      area:         m.strArea,
+      instructions: m.strInstructions?.slice(0, 300) + '…',
+      image:        m.strMealThumb,
+      youtube:      m.strYoutube,
+      source:       m.strSource,
+    }));
+    res.json({ meals, total: meals.length });
+  } catch (err) {
+    res.json({ meals: [], total: 0, error: err.message });
+  }
+});
+
 module.exports = router;

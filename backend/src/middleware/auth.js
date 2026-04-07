@@ -35,5 +35,22 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
+// Middleware auth optionnel — ne bloque pas si pas de token, mais remplit req.user si présent
+const optionalAuth = async (req, _res, next) => {
+  try {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith('Bearer ')) return next();
+    const token = header.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const [rows] = await db.query(
+      'SELECT id, email, username, role, is_active FROM users WHERE id = ?',
+      [decoded.userId]
+    );
+    if (rows.length && rows[0].is_active) req.user = rows[0];
+  } catch { /* ignore */ }
+  next();
+};
+
 module.exports = auth;
 module.exports.requireRole = requireRole;
+module.exports.optionalAuth = optionalAuth;

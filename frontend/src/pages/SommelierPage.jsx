@@ -1,7 +1,8 @@
 // src/pages/SommelierPage.jsx
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { sommelierAPI } from '../services/api';
+import { useLang } from '../context/LangContext';
 import toast from 'react-hot-toast';
 
 const CHIPS = ['Lasagnes au bœuf','Côte de bœuf grillée','Foie gras poêlé','Saint-Jacques snackées','Saumon fumé','Plateau fromages','Fondant chocolat','Huîtres fraîches','Agneau rôti','Poulet rôti','Pizza margherita','Sushi & sashimi','Tajine d\'agneau','Risotto aux champignons'];
@@ -11,16 +12,25 @@ const Stars = ({ n }) => Array.from({ length: 5 }, (_, i) => (
 ));
 
 export default function SommelierPage() {
+  const { t } = useLang();
   const [query, setQuery] = useState('');
   const [result, setResult] = useState(null);
+  const [recipes, setRecipes] = useState(null);
+  const [showRecipes, setShowRecipes] = useState(false);
 
   const mutation = useMutation({
     mutationFn: (q) => sommelierAPI.accord(q).then(r => r.data),
-    onSuccess: (data) => setResult(data),
+    onSuccess: (data) => { setResult(data); setRecipes(null); setShowRecipes(false); },
     onError: (err) => {
       const msg = err.response?.data?.error || 'Erreur du service IA';
       toast.error(msg, { duration: 6000 });
     },
+  });
+
+  const recipesMut = useMutation({
+    mutationFn: (food) => sommelierAPI.recipes(food).then(r => r.data),
+    onSuccess: (data) => { setRecipes(data); setShowRecipes(true); },
+    onError: () => toast.error('Impossible de charger les recettes'),
   });
 
   const ask = (q) => { const v = q || query; if (!v.trim()) return; setQuery(v); mutation.mutate(v); };
@@ -147,6 +157,53 @@ export default function SommelierPage() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Bouton recettes */}
+                <div className="mt-3 pt-3" style={{ borderTop:'0.5px solid var(--cv-border)' }}>
+                  <button className="btn btn-sm btn-outline-gold" onClick={() => recipesMut.mutate(query)} disabled={recipesMut.isPending}>
+                    {recipesMut.isPending ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-journal-richtext me-1"></i>}
+                    {t('sommelier.findRecipes')}
+                  </button>
+                  <span style={{ fontSize:'0.72rem', color:'var(--cv-text3)', marginLeft:8 }}>{t('sommelier.recipesSource')}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recettes TheMealDB */}
+        {showRecipes && recipes && (
+          <div className="col-12 fade-in">
+            <div className="card">
+              <div className="card-header d-flex justify-content-between align-items-center">
+                <h6 className="card-title mb-0"><i className="bi bi-journal-richtext me-2"></i>{t('sommelier.recipesTitle')} « {query} »</h6>
+                <button className="btn btn-sm" style={{ background:'none', border:'none', color:'var(--cv-text3)' }} onClick={() => setShowRecipes(false)}>
+                  <i className="bi bi-x-lg"></i>
+                </button>
+              </div>
+              <div className="card-body">
+                {recipes.meals?.length === 0 ? (
+                  <p style={{ color:'var(--cv-text2)', fontSize:'0.85rem' }}>{t('sommelier.noRecipes')}</p>
+                ) : (
+                  <div className="row g-3">
+                    {recipes.meals?.map(meal => (
+                      <div className="col-md-6 col-lg-4" key={meal.id}>
+                        <div className="reco-card h-100 d-flex flex-column">
+                          {meal.image && <img src={meal.image} alt={meal.name} style={{ width:'100%', height:120, objectFit:'cover', borderRadius:6, marginBottom:8 }} />}
+                          <div style={{ fontWeight:600, fontSize:'0.88rem', color:'var(--cv-text)', marginBottom:4 }}>{meal.name}</div>
+                          <div style={{ fontSize:'0.72rem', color:'var(--cv-text3)', marginBottom:6 }}>{meal.category} · {meal.area}</div>
+                          <div style={{ fontSize:'0.77rem', color:'var(--cv-text2)', flexGrow:1 }}>{meal.instructions}</div>
+                          {(meal.youtube || meal.source) && (
+                            <div className="d-flex gap-2 mt-2">
+                              {meal.youtube && <a href={meal.youtube} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-gold" style={{ fontSize:'0.72rem' }}><i className="bi bi-youtube me-1"></i>Vidéo</a>}
+                              {meal.source && <a href={meal.source} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline-gold" style={{ fontSize:'0.72rem' }}><i className="bi bi-link-45deg me-1"></i>Recette</a>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

@@ -61,13 +61,14 @@ export const winesAPI = {
   remove:    (id)     => api.delete(`/wines/${id}`),
   addAccord: (id, data) => api.post(`/wines/${id}/accords`, data),
   stats:     ()       => api.get('/wines/stats'),
+  enrich:    (id)     => api.get(`/wines/${id}/enrich`),
 };
 
 // ─── Spirits ──────────────────────────────────────────────────────────────────
 export const spiritsAPI = {
   list:   (params) => api.get('/spirits', { params }),
-  create: (data)   => api.post('/spirits', data),
-  update: (id, data) => api.put(`/spirits/${id}`, data),
+  create: (data)   => api.post('/spirits', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  update: (id, data) => api.put(`/spirits/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
   remove: (id)     => api.delete(`/spirits/${id}`),
 };
 
@@ -76,6 +77,7 @@ export const sommelierAPI = {
   accord:  (query)    => api.post('/sommelier/accord', { query }),
   scan:    (formData) => api.post('/sommelier/scan', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   history: ()         => api.get('/sommelier/history'),
+  recipes: (food)     => api.get('/sommelier/recipes', { params: { food } }),
 };
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
@@ -84,6 +86,18 @@ export const adminAPI = {
   createUser:  (data)       => api.post('/auth/admin/users', data),
   updateUser:  (id, data)   => api.put(`/auth/admin/users/${id}`, data),
   deleteUser:  (id)         => api.delete(`/auth/admin/users/${id}`),
+  getSettings: ()           => api.get('/settings'),
+  saveSettings:(data)       => api.put('/settings', data),
+  testSmtp:    ()           => api.post('/settings/test-smtp'),
+  publicConfig:()           => api.get('/settings/public'),
+};
+
+// ─── Auth 2FA ─────────────────────────────────────────────────────────────────
+export const totpAPI = {
+  setup:   () => api.post('/auth/totp/setup'),
+  confirm: (token) => api.post('/auth/totp/confirm', { token }),
+  disable: (password) => api.post('/auth/totp/disable', { password }),
+  status:  () => api.get('/auth/totp/status'),
 };
 
 // ─── Health ───────────────────────────────────────────────────────────────────
