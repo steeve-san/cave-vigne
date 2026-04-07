@@ -21,6 +21,8 @@ async function callClaude(messages, maxTokens = 1000) {
 
 // POST /api/sommelier/accord — accord mets/vins depuis cave
 router.post('/accord', auth, async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY)
+    return res.status(503).json({ error: 'Clé API Anthropic non configurée — ajoute ANTHROPIC_API_KEY dans le .env et redémarre l\'API.' });
   const { query } = req.body;
   if (!query?.trim()) return res.status(400).json({ error: 'Requête manquante' });
 
@@ -64,6 +66,8 @@ Priorité absolue aux bouteilles en cave. Score 1-5.`;
 
 // POST /api/sommelier/scan — analyse étiquette par image
 router.post('/scan', auth, upload.single('label'), async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY)
+    return res.status(503).json({ error: 'Clé API Anthropic non configurée.' });
   if (!req.file) return res.status(400).json({ error: 'Image manquante' });
   try {
     const webp = await sharp(req.file.buffer).resize(1200, 1200, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 88 }).toBuffer();

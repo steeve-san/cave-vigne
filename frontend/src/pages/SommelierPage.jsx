@@ -17,7 +17,10 @@ export default function SommelierPage() {
   const mutation = useMutation({
     mutationFn: (q) => sommelierAPI.accord(q).then(r => r.data),
     onSuccess: (data) => setResult(data),
-    onError: (err) => toast.error(err.response?.data?.error || 'Erreur du service IA'),
+    onError: (err) => {
+      const msg = err.response?.data?.error || 'Erreur du service IA';
+      toast.error(msg, { duration: 6000 });
+    },
   });
 
   const ask = (q) => { const v = q || query; if (!v.trim()) return; setQuery(v); mutation.mutate(v); };

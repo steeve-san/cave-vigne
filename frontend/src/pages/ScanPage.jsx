@@ -1,5 +1,5 @@
 // src/pages/ScanPage.jsx
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { sommelierAPI, winesAPI } from '../services/api';
@@ -38,12 +38,19 @@ export default function ScanPage() {
   const onDrop = useCallback((files) => { if (files[0]) analyse(files[0]); }, []);
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: { 'image/*': [] }, maxFiles: 1, noClick: false });
 
+  // Attache le stream après que <video> soit monté (cameraOn=true déclenche le rendu)
+  useEffect(() => {
+    if (cameraOn && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraOn]);
+
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
       streamRef.current = stream;
-      if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
-      setCameraOn(true);
+      setCameraOn(true); // monte <video> → useEffect l'attache ensuite
     } catch (err) { toast.error('Impossible d\'accéder à la caméra : ' + err.message); }
   };
 
@@ -81,7 +88,6 @@ export default function ScanPage() {
               {cameraOn && (
                 <div style={{ position:'relative', background:'#000', borderRadius:10, overflow:'hidden', marginBottom:'1rem' }}>
                   <video ref={videoRef} style={{ width:'100%', display:'block', maxHeight:400, objectFit:'cover' }} muted playsInline />
-                  <canvas ref={canvasRef} style={{ display:'none' }} />
                   <div className="scan-frame" />
                   <div className="d-flex gap-2 justify-content-center p-3" style={{ position:'absolute', bottom:0, width:'100%', background:'rgba(0,0,0,0.4)' }}>
                     <button className="btn btn-gold" onClick={capture}><i className="bi bi-camera me-1"></i>Capturer</button>
