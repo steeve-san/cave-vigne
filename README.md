@@ -3,10 +3,11 @@
 > **Gestionnaire de cave à vin et spiritueux** — Application web full-stack avec sommelier IA, cartes interactives et scan d'étiquettes par vision artificielle.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-C9A84C.svg)](./LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?logo=node.js)](https://nodejs.org)
-[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://react.dev)
+[![Node.js](https://img.shields.io/badge/Node.js-24.x-339933?logo=node.js)](https://nodejs.org)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite)](https://vitejs.dev)
 [![Bootstrap](https://img.shields.io/badge/Bootstrap-5.3-7952B3?logo=bootstrap)](https://getbootstrap.com)
-[![MariaDB](https://img.shields.io/badge/MariaDB-11-003545?logo=mariadb)](https://mariadb.org)
+[![MariaDB](https://img.shields.io/badge/MariaDB-12-003545?logo=mariadb)](https://mariadb.org)
 
 ---
 
@@ -14,19 +15,25 @@
 
 **Cave & Vigne** est une application web complète de gestion de cave personnelle. Elle permet de référencer ses bouteilles de vin et spiritueux, d'obtenir des recommandations d'accords mets/vins grâce à l'IA Claude (Anthropic), de visualiser ses vignobles sur des cartes interactives, et de scanner les étiquettes à la caméra pour importer automatiquement les informations.
 
-### ✨ Fonctionnalités principales
+### ✨ Fonctionnalités
 
 | Fonctionnalité | Description |
 |---|---|
 | 🔐 **Authentification** | Inscription/connexion sécurisée, JWT access + refresh token |
-| 🍷 **Cave à vins** | CRUD complet, quantités, statut bue/en cave, position, prix, millésime |
+| 🛡️ **2FA TOTP** | Double authentification (Google Authenticator, FreeOTP) |
+| 🍷 **Cave à vins** | CRUD complet, quantités, position, prix, millésime, infos domaine |
 | 🥃 **Spiritueux** | Whisky, rhum, cognac, armagnac, calvados, gin, vodka — avec statut ouvert/fermé |
+| 📸 **Photos bouteilles** | Photo étiquette + photo bouteille, infos domaine (site web, sol, altitude) |
 | ✦ **Sommelier IA** | Recommandations d'accords mets/vins depuis votre cave, via Claude |
-| 📸 **Scan d'étiquettes** | Caméra ou photo importée → Claude Vision extrait les infos automatiquement |
+| 📷 **Scan d'étiquettes** | Caméra ou photo importée → Claude Vision extrait les infos automatiquement |
+| 🔍 **Enrichissement** | Import automatique depuis Open Food Facts |
+| 🍽️ **Recettes associées** | Suggestions de recettes via TheMealDB |
 | 🌍 **Carte mondiale** | Vignobles du monde avec vos bouteilles en surbrillance |
 | 🇫🇷 **Carte France** | Régions viticoles françaises avec cépages, AOC et vos stocks |
 | 🗺 **Carte spiritueux** | Origines mondiales de vos spiritueux |
 | ⭐ **Accords notés** | Notation 5 étoiles des accords mets/vin avec commentaire |
+| 🌐 **Catalogue public** | Mode visiteur sans authentification (configurable) |
+| ⚙️ **Admin** | Gestion clé API Anthropic, SMTP, catalogue public depuis l'UI |
 | 📱 **App Android** | Application WebView native (caméra, offline, swipe-to-refresh) |
 
 ---
@@ -44,15 +51,15 @@
 └──────────┬───────────────────────┬──────────────────┘
            │                       │
 ┌──────────▼──────────┐  ┌────────▼────────────────┐
-│   React 18 + BS5    │  │  Node.js / Express API  │
-│   (SPA build)       │  │  Port 3001 (127.0.0.1)  │
+│   React 19 + BS5    │  │  Node.js / Express API  │
+│   Vite 6 (build)    │  │  Port 3001 (127.0.0.1)  │
 └─────────────────────┘  └────────┬────────────────┘
                                   │
                     ┌─────────────┼──────────────┐
                     │             │              │
               ┌─────▼─────┐ ┌────▼────┐  ┌─────▼──────┐
               │  MariaDB  │ │  Redis  │  │ Anthropic  │
-              │   :3306   │ │  :6379  │  │    API     │
+              │    12     │ │  :6379  │  │    API     │
               └───────────┘ └─────────┘  └────────────┘
 ```
 
@@ -60,11 +67,12 @@
 
 | Couche | Technologie |
 |--------|-------------|
-| Frontend | React 18, Bootstrap 5, React Query, D3.js, Axios |
-| Backend | Node.js 20, Express 4, JWT, Multer, Sharp |
-| Base de données | MariaDB 11 (MySQL compatible) |
+| Frontend | React 19, Bootstrap 5, React Query v5, D3.js, Axios |
+| Build | Vite 6 + @vitejs/plugin-react |
+| Backend | Node.js 24, Express 4, JWT, Multer, Sharp 0.34 |
+| Base de données | MariaDB 12 (mysql2 driver) |
 | Cache | Redis 7 |
-| IA | Claude (Anthropic) — Sommelier + Vision |
+| IA | Claude Sonnet 4.6 (Anthropic) — Sommelier + Vision |
 | Serveur web | Nginx |
 | CDN/Sécurité | Cloudflare |
 | Process manager | PM2 (cluster mode) |
@@ -76,8 +84,8 @@
 
 ### Prérequis
 
-- Node.js 20+
-- MariaDB ou MySQL 8+
+- Node.js 24+
+- MariaDB 12 (ou MySQL 8+)
 - Redis (optionnel, dégrade gracieusement)
 - Clé API Anthropic (pour Sommelier IA + Scan)
 
@@ -89,7 +97,7 @@ cp .env.example .env
 # Éditer .env avec vos paramètres
 npm install
 npm run migrate    # Crée les tables
-npm run dev        # Démarre en mode dev (nodemon)
+npm run dev        # Démarre en mode dev (nodemon, port 3001)
 ```
 
 ### 2. Frontend
@@ -99,7 +107,7 @@ cd frontend
 # Créer .env.local
 echo "REACT_APP_API_URL=http://localhost:3001/api" > .env.local
 npm install
-npm start          # Lance sur http://localhost:3000
+npm start          # Vite dev server → http://localhost:3000
 ```
 
 ### 3. Variables d'environnement requises
@@ -131,36 +139,45 @@ cave-vigne/
 │   │   ├── config/
 │   │   │   ├── db.js           # Pool MariaDB
 │   │   │   ├── redis.js        # Cache Redis
-│   │   │   └── migrate.js      # Migration BDD
+│   │   │   ├── email.js        # Transport Nodemailer dynamique
+│   │   │   └── migrate.js      # Migration BDD (tables + ALTER)
 │   │   ├── middleware/
-│   │   │   └── auth.js         # Vérification JWT
+│   │   │   └── auth.js         # Vérification JWT + optionalAuth
 │   │   ├── routes/
-│   │   │   ├── auth.js         # Login, register, refresh
-│   │   │   ├── wines.js        # CRUD vins + accords + stats
+│   │   │   ├── auth.js         # Login, register, refresh, 2FA TOTP
+│   │   │   ├── wines.js        # CRUD vins + accords + enrichissement
 │   │   │   ├── spirits.js      # CRUD spiritueux
-│   │   │   └── sommelier.js    # IA accord + scan étiquette
+│   │   │   ├── sommelier.js    # IA accord + scan + recettes TheMealDB
+│   │   │   └── settings.js     # Config admin (API key, SMTP, catalogue)
 │   │   └── server.js           # Point d'entrée Express
 │   ├── ecosystem.config.js     # Config PM2
 │   ├── .env.example
 │   └── package.json
 │
-├── frontend/                   # React SPA
+├── frontend/                   # React 19 SPA
+│   ├── index.html              # Entrée Vite (racine projet)
+│   ├── vite.config.js          # Config Vite (proxy, envPrefix, outDir)
 │   ├── src/
 │   │   ├── components/
 │   │   │   └── Layout.jsx      # Sidebar + Topbar responsive
 │   │   ├── context/
 │   │   │   └── AuthContext.jsx # Auth state global
+│   │   ├── locales/
+│   │   │   ├── fr.js           # Traductions françaises
+│   │   │   └── en.js           # Traductions anglaises
 │   │   ├── pages/
-│   │   │   ├── Login.jsx       # Page connexion
-│   │   │   ├── Register.jsx    # Page inscription
-│   │   │   ├── Dashboard.jsx   # Tableau de bord
-│   │   │   ├── WinesPage.jsx   # Gestion cave vins
-│   │   │   ├── SpiritsPage.jsx # Gestion spiritueux
-│   │   │   ├── SommelierPage.jsx # Sommelier IA
+│   │   │   ├── Login.jsx
+│   │   │   ├── Register.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── WinesPage.jsx   # Cave vins (tabs: vin / domaine / photos)
+│   │   │   ├── SpiritsPage.jsx # Spiritueux (tabs: spirit / distillerie / photos)
+│   │   │   ├── SommelierPage.jsx # Sommelier IA + recettes
 │   │   │   ├── ScanPage.jsx    # Scanner étiquette
-│   │   │   ├── WorldMapPage.jsx  # Carte mondiale D3
-│   │   │   ├── FranceMapPage.jsx # Carte France D3
-│   │   │   └── SpiritsMapPage.jsx# Carte origines
+│   │   │   ├── ProfilePage.jsx # Profil utilisateur + 2FA
+│   │   │   ├── AdminPage.jsx   # Admin : utilisateurs + paramètres
+│   │   │   ├── WorldMapPage.jsx
+│   │   │   ├── FranceMapPage.jsx
+│   │   │   └── SpiritsMapPage.jsx
 │   │   ├── services/
 │   │   │   └── api.js          # Axios + auto-refresh JWT
 │   │   ├── App.jsx             # Routes React Router
@@ -171,18 +188,18 @@ cave-vigne/
 ├── android/                    # App Android native
 │   └── app/src/main/
 │       ├── java/com/cavevigne/
-│       │   └── MainActivity.kt # WebView + caméra + permissions
-│       ├── res/layout/
-│       │   └── activity_main.xml
+│       │   └── MainActivity.kt
 │       └── AndroidManifest.xml
 │
 ├── nginx/
 │   └── cavevigne.fr.conf       # Config Nginx production
 │
 ├── docs/
-│   └── DEPLOY.md               # Guide déploiement complet
+│   ├── DEPLOY.md               # Guide déploiement complet
+│   └── GITHUB_META.md
 │
 ├── deploy.sh                   # Script déploiement automatisé Debian 13
+├── CHANGELOG.md
 ├── .gitignore
 ├── LICENSE
 └── README.md
@@ -206,32 +223,20 @@ Le script installe et configure **automatiquement** l'ensemble de la stack :
 | Étape | Action |
 |-------|--------|
 | 1 | Mise à jour système + dépendances (`libvips`, `curl`, etc.) |
-| 2 | Node.js 20 LTS + PM2 (cluster mode) |
-| 3 | MariaDB 11 — création BDD, utilisateur, tuning InnoDB |
+| 2 | Node.js 24 LTS + PM2 (cluster mode) |
+| 3 | MariaDB 12 — création BDD, utilisateur, tuning InnoDB |
 | 4 | Redis — sécurisé (bind 127.0.0.1, mot de passe) |
 | 5 | Nginx — config copiée depuis `nginx/`, SSL Let's Encrypt |
-| 6 | Backend + Frontend — copie, `.env` généré, migration BDD, build React |
+| 6 | Backend + Frontend — copie, `.env` généré, migration BDD, build Vite |
 | 7 | PM2 startup systemd |
 | 8 | Certbot SSL + renouvellement automatique (cron 3h) |
 | 9 | UFW — SSH + HTTPS ouverts, MariaDB/Redis/3001 bloqués |
 
 > Le script génère automatiquement le `JWT_SECRET` et demande de manière interactive le domaine, l'email SSL, les mots de passe et la clé API Anthropic.
 
-**Prérequis** : le DNS du domaine doit pointer sur l'IP du VPS avant le lancement (nécessaire pour Certbot).
-
 ### Déploiement manuel
 
 Voir le guide complet : **[docs/DEPLOY.md](./docs/DEPLOY.md)**
-
-Résumé des étapes :
-
-1. VPS Debian 13 — Node.js 20, Nginx, MariaDB 11, Redis, PM2, Certbot
-2. Configurer `backend/.env` avec vos secrets
-3. `npm run migrate` — créer les tables
-4. `npm run build` dans `/frontend` — générer le build React
-5. Configurer Nginx avec `nginx/cavevigne.fr.conf`
-6. Certbot SSL — `certbot --nginx -d votre-domaine.fr`
-7. Cloudflare — proxy activé, mode SSL Full Strict, cache rules
 
 ---
 
@@ -251,6 +256,7 @@ L'application Android est une WebView Kotlin qui encapsule l'application web ave
 
 - Mots de passe hashés avec **bcrypt** (salt factor 12)
 - **JWT** avec expiration courte (7j) + refresh token (30j)
+- **2FA TOTP** compatible Google Authenticator, FreeOTP, Authy
 - **Rate limiting** : 200 req/15min global, 20 req/15min sur auth
 - **Helmet.js** — headers de sécurité HTTP
 - **CORS** restreint aux origines autorisées
@@ -275,11 +281,11 @@ Les contributions sont les bienvenues ! Pour contribuer :
 - [ ] Import/export CSV de la cave
 - [ ] Notifications rappel de garder jusqu'à (keep_until)
 - [ ] Application iOS (Swift WebView)
-- [ ] Mode hors-ligne avec Service Worker
+- [ ] Mode hors-ligne avec Service Worker / PWA
 - [ ] Partage de cave entre utilisateurs
-- [ ] Intégration API Vivino (si disponible)
 - [ ] Statistiques avancées et graphiques Chart.js
-- [ ] Dark/Light mode toggle
+- [ ] Recherche full-text (MariaDB FTS)
+- [ ] Mode dégustation (fiche de dégustation complète)
 
 ---
 
@@ -291,10 +297,11 @@ Ce projet est sous licence **MIT** — voir [LICENSE](./LICENSE) pour les détai
 
 ## 🙏 Crédits
 
-- **Claude (Anthropic)** — Sommelier IA et analyse d'étiquettes par vision
+- **Claude Sonnet 4.6 (Anthropic)** — Sommelier IA et analyse d'étiquettes par vision
 - **D3.js** — Cartes interactives
 - **Bootstrap 5** — Interface utilisateur
-- **World Atlas** / **Datamaps** — Données topographiques
+- **Open Food Facts** — Enrichissement des données vin
+- **TheMealDB** — Suggestions de recettes associées
 
 ---
 

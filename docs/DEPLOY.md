@@ -6,16 +6,16 @@
 Internet ──► Cloudflare (proxy/WAF/CDN)
                   │
                   ▼
-             VPS Ubuntu 22.04
+             VPS Debian 13 (Trixie)
              ┌─────────────────────────────────┐
              │  Nginx :443  (SSL + reverse proxy│
              │       │              │            │
-             │  /api/*        /  (SPA build)    │
+             │  /api/*        /  (Vite build)   │
              │       │                           │
-             │  Node.js :3001  (Express API)    │
+             │  Node.js 24 :3001  (Express API) │
              │       │                           │
-             │  MariaDB :3306  (données)        │
-             │  Redis   :6379  (cache)          │
+             │  MariaDB 12 :3306  (données)     │
+             │  Redis      :6379  (cache)       │
              └─────────────────────────────────┘
 ```
 
@@ -24,17 +24,23 @@ Internet ──► Cloudflare (proxy/WAF/CDN)
 ## 1. Prérequis VPS
 
 ```bash
-# Ubuntu 22.04 — mise à jour système
+# Debian 13 (Trixie) — mise à jour système
 sudo apt update && sudo apt upgrade -y
 
-# Node.js 20 LTS
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Node.js 24 LTS
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
+
+# Vérifier
+node -v   # v24.x.x
+npm -v
 
 # Nginx
 sudo apt install -y nginx
 
-# MariaDB 11
+# MariaDB 12
+# Ajouter le dépôt MariaDB 12
+curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version="mariadb-12"
 sudo apt install -y mariadb-server
 sudo mysql_secure_installation
 
@@ -54,7 +60,7 @@ sudo apt install -y libvips-dev
 
 ---
 
-## 2. MariaDB — Création base et utilisateur
+## 2. MariaDB 12 — Création base et utilisateur
 
 ```sql
 sudo mysql -u root -p
@@ -117,36 +123,37 @@ cd /var/www/cave-vigne/backend
 cp .env.example .env
 nano .env  # Remplir TOUS les paramètres
 
-# Installer dépendances
-npm install --production
+# Installer dépendances (rebuild sharp pour Node 24)
+npm install
+npm rebuild sharp
 
-# Migration base de données
+# Migration base de données (crée tables + colonnes nouvelles)
 npm run migrate
 
 # Lancer avec PM2
-pm2 start src/server.js --name "cave-vigne-api" --max-memory-restart 200M
+pm2 start ecosystem.config.js
 pm2 save
 pm2 startup  # Suivre les instructions affichées
 ```
 
 ---
 
-## 5. Build Frontend
+## 5. Build Frontend (Vite)
 
 ```bash
 cd frontend
 
 # Créer .env.production
-cat > .env.production << EOF
-REACT_APP_API_URL=https://cavevigne.fr/api
-EOF
+echo "REACT_APP_API_URL=https://cavevigne.fr/api" > .env.production
 
 npm install
-npm run build
+npm run build    # → dossier build/
 
 # Copier le build
 sudo cp -r build/* /var/www/cave-vigne/frontend/build/
 ```
+
+> **Note :** le build Vite produit dans `build/` (configuré via `vite.config.js → outDir`), compatible avec la config Nginx existante.
 
 ---
 
@@ -178,7 +185,6 @@ sudo systemctl reload nginx
 |------|-----|--------|-------|
 | A | cavevigne.fr | IP_VPS | ✅ Proxied |
 | A | www | IP_VPS | ✅ Proxied |
-| A | api | IP_VPS | ✅ Proxied |
 
 ### SSL/TLS
 - Mode : **Full (strict)**
@@ -189,13 +195,12 @@ sudo systemctl reload nginx
 - Caching Level : **Standard**
 - Browser Cache TTL : **4 hours**
 
-### Page Rules (ou Cache Rules)
+### Cache Rules
 | URL | Action |
 |-----|--------|
 | `cavevigne.fr/api/*` | Cache Level: Bypass |
 | `cavevigne.fr/uploads/*` | Cache Level: Cache Everything, Edge TTL: 7 days |
-| `cavevigne.fr/*.js` | Cache Level: Cache Everything, Edge TTL: 1 month |
-| `cavevigne.fr/*.css` | Cache Level: Cache Everything, Edge TTL: 1 month |
+| `cavevigne.fr/assets/*` | Cache Level: Cache Everything, Edge TTL: 1 month |
 
 ### Security
 - Security Level : **Medium**
@@ -215,10 +220,9 @@ sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow ssh
 sudo ufw allow 'Nginx Full'
-# Bloquer accès direct MariaDB/Redis depuis l'extérieur
-sudo ufw deny 3306
-sudo ufw deny 6379
-sudo ufw deny 3001   # API Node accessible uniquement via Nginx
+sudo ufw deny 3306   # MariaDB — accès uniquement local
+sudo ufw deny 6379   # Redis — accès uniquement local
+sudo ufw deny 3001   # API Node — uniquement via Nginx
 sudo ufw enable
 ```
 
@@ -236,17 +240,36 @@ sudo ufw enable
 
 ---
 
-## 10. Maintenance
+## 10. Configuration admin (interface web)
+
+Après le premier déploiement, connectez-vous avec un compte `admin` et accédez à **Admin → Paramètres** pour :
+
+- Renseigner la **clé API Anthropic** (Sommelier IA + Scan)
+- Configurer le **serveur SMTP** pour les emails (création de compte, 2FA)
+- Activer/désactiver le **catalogue public** (accès sans authentification)
+
+Ces paramètres sont stockés en base et pris en compte immédiatement sans redémarrage.
+
+---
+
+## 11. Maintenance
 
 ```bash
 # Logs backend
 pm2 logs cave-vigne-api
 
-# Redémarrer après mise à jour
+# Mise à jour backend
 cd /var/www/cave-vigne/backend
 git pull
-npm install --production
+npm install
+npm rebuild sharp
+npm run migrate    # Applique les nouvelles colonnes si nécessaire
 pm2 restart cave-vigne-api
+
+# Mise à jour frontend
+cd /path/to/repo/frontend
+npm run build
+sudo cp -r build/* /var/www/cave-vigne/frontend/build/
 
 # Renouvellement SSL automatique
 sudo certbot renew --dry-run
@@ -256,7 +279,7 @@ sudo certbot renew --dry-run
 # Ajouter dans crontab -e :
 # 0 3 * * * mysqldump -u cave_user -pPASSWORD cave_vigne | gzip > /backup/cave_$(date +\%Y\%m\%d).sql.gz
 
-# Purge cache Cloudflare (si nécessaire)
+# Purge cache Cloudflare
 curl -X POST "https://api.cloudflare.com/client/v4/zones/ZONE_ID/purge_cache" \
      -H "Authorization: Bearer CF_TOKEN" \
      -H "Content-Type: application/json" \
@@ -265,14 +288,14 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/ZONE_ID/purge_cache" \
 
 ---
 
-## 11. Variables d'environnement requises
+## 12. Variables d'environnement requises
 
 | Variable | Description |
 |----------|-------------|
 | `DB_PASSWORD` | Mot de passe MariaDB fort (min 20 chars) |
 | `JWT_SECRET` | Clé JWT 64+ caractères aléatoires |
 | `REDIS_PASSWORD` | Mot de passe Redis |
-| `ANTHROPIC_API_KEY` | Clé API Anthropic (Sommelier + Scan) |
+| `ANTHROPIC_API_KEY` | Clé API Anthropic (Sommelier + Scan) — configurable aussi depuis l'UI admin |
 | `CF_ZONE_ID` | Zone ID Cloudflare (dashboard → Overview) |
 | `CF_API_TOKEN` | Token API Cloudflare (Zone:Cache Purge) |
 
