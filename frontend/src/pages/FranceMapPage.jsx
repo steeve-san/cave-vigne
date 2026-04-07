@@ -188,11 +188,20 @@ export default function FranceMapPage() {
     d3.json('https://cdn.jsdelivr.net/npm/datamaps@0.5.10/src/js/data/fra.topo.json')
       .then(fra => {
         const feat = topojson.feature(fra, fra.objects.fra);
-        const proj = d3.geoMercator().fitSize([480, 420], feat);
+        // Filtre France métropolitaine uniquement (exclut DOM-TOM)
+        // Sans ce filtre, fitSize inclut Réunion/Martinique → carte minuscule
+        const metro = {
+          type: 'FeatureCollection',
+          features: feat.features.filter(f => {
+            const [lon, lat] = d3.geoCentroid(f);
+            return lon > -6 && lon < 10 && lat > 41 && lat < 52;
+          }),
+        };
+        const proj = d3.geoMercator().fitExtent([[10, 10], [470, 410]], metro);
         svg.append('rect').attr('width', 480).attr('height', 420).attr('fill', '#1A1010');
         svg
           .selectAll('path.dept')
-          .data(feat.features)
+          .data(metro.features)
           .join('path')
           .attr('class', 'dept')
           .attr('d', d3.geoPath(proj))
