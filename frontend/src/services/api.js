@@ -78,11 +78,12 @@ export const spiritsAPI = {
 
 // ─── Sommelier ────────────────────────────────────────────────────────────────
 export const sommelierAPI = {
-  accord:  (query)    => api.post('/sommelier/accord', { query }),
-  scan:    (formData) => api.post('/sommelier/scan', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  history: ()         => api.get('/sommelier/history'),
-  recipes: (food)     => api.get('/sommelier/recipes', { params: { food } }),
-  analyse: ()         => api.post('/sommelier/analyse'),
+  accord:    (query)    => api.post('/sommelier/accord', { query }),
+  scan:      (formData) => api.post('/sommelier/scan', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  history:   ()         => api.get('/sommelier/history'),
+  recipes:   (food)     => api.get('/sommelier/recipes', { params: { food } }),
+  analyse:   ()         => api.post('/sommelier/analyse'),
+  providers: ()         => api.get('/sommelier/providers'),
 };
 
 // ─── Tasting notes ────────────────────────────────────────────────────────────

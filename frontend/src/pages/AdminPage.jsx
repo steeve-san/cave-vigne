@@ -133,6 +133,104 @@ function SettingsTab() {
         </div>
       </div>
 
+      {/* AI Provider */}
+      <div className="col-12">
+        <div className="card">
+          <div className="card-header"><h6 className="card-title mb-0"><i className="bi bi-cpu me-2"></i>Fournisseur IA (Sommelier & Scan)</h6></div>
+          <div className="card-body">
+            <div className="row g-3">
+              <div className="col-12">
+                <label className="form-label">Fournisseur actif</label>
+                <select className="form-select" value={get('ai_provider')} onChange={set('ai_provider')}>
+                  <option value="anthropic">Claude (Anthropic)</option>
+                  <option value="openai">ChatGPT (OpenAI)</option>
+                  <option value="mistral">Mistral AI</option>
+                  <option value="openwebui">OpenWebUI / Ollama (auto-hébergé)</option>
+                </select>
+              </div>
+
+              {/* Anthropic */}
+              {(get('ai_provider') || 'anthropic') === 'anthropic' && (
+                <>
+                  <div className="col-md-8">
+                    <label className="form-label">Clé API Anthropic</label>
+                    <input className="form-control" type="password"
+                      placeholder={isSet('anthropic_key') ? `••••••••••• (${t('admin.settings.configured')})` : 'sk-ant-...'}
+                      value={get('anthropic_key')} onChange={set('anthropic_key')} />
+                    <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginTop: 4 }}>{t('admin.settings.anthropicHint')}</div>
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label">Modèle</label>
+                    <input className="form-control" placeholder="claude-sonnet-4-6" value={get('anthropic_model')} onChange={set('anthropic_model')} />
+                  </div>
+                </>
+              )}
+
+              {/* OpenAI */}
+              {get('ai_provider') === 'openai' && (
+                <>
+                  <div className="col-md-8">
+                    <label className="form-label">Clé API OpenAI</label>
+                    <input className="form-control" type="password"
+                      placeholder={isSet('openai_key') ? `••••••••••• (${t('admin.settings.configured')})` : 'sk-...'}
+                      value={get('openai_key')} onChange={set('openai_key')} />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label">Modèle</label>
+                    <input className="form-control" placeholder="gpt-4o-mini" value={get('openai_model')} onChange={set('openai_model')} />
+                    <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginTop: 4 }}>gpt-4o, gpt-4o-mini, gpt-4-turbo…</div>
+                  </div>
+                </>
+              )}
+
+              {/* Mistral */}
+              {get('ai_provider') === 'mistral' && (
+                <>
+                  <div className="col-md-8">
+                    <label className="form-label">Clé API Mistral</label>
+                    <input className="form-control" type="password"
+                      placeholder={isSet('mistral_key') ? `••••••••••• (${t('admin.settings.configured')})` : '...'}
+                      value={get('mistral_key')} onChange={set('mistral_key')} />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label">Modèle</label>
+                    <input className="form-control" placeholder="mistral-small-latest" value={get('mistral_model')} onChange={set('mistral_model')} />
+                    <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginTop: 4 }}>mistral-large-latest, open-mistral-7b…</div>
+                  </div>
+                </>
+              )}
+
+              {/* OpenWebUI / Ollama */}
+              {get('ai_provider') === 'openwebui' && (
+                <>
+                  <div className="col-md-6">
+                    <label className="form-label">URL du serveur</label>
+                    <input className="form-control" placeholder="http://localhost:11434" value={get('openwebui_url')} onChange={set('openwebui_url')} />
+                    <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginTop: 4 }}>Ollama: http://localhost:11434 · OpenWebUI: http://localhost:3000</div>
+                  </div>
+                  <div className="col-md-3">
+                    <label className="form-label">Modèle</label>
+                    <input className="form-control" placeholder="llama3" value={get('openwebui_model')} onChange={set('openwebui_model')} />
+                  </div>
+                  <div className="col-md-3">
+                    <label className="form-label">API Key (optionnel)</label>
+                    <input className="form-control" placeholder="sk-..." value={get('openwebui_key')} onChange={set('openwebui_key')} />
+                  </div>
+                </>
+              )}
+
+              <div className="col-12">
+                <div style={{ fontSize: '0.78rem', color: 'var(--cv-text3)', padding: '8px 12px', background: 'var(--cv-bg2)', borderRadius: 6 }}>
+                  <i className="bi bi-info-circle me-1" style={{ color: 'var(--cv-gold)' }}></i>
+                  Note: le scan d'étiquette (vision) nécessite un modèle supportant les images. Anthropic (Claude) et OpenAI (GPT-4o) sont recommandés.
+                  Mistral et OpenWebUI utilisent uniquement le texte pour le scan.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Bouton save */}
       <div className="col-12 d-flex justify-content-end">
         <button className="btn btn-gold" onClick={() => saveMut.mutate(vals)} disabled={saveMut.isPending}>

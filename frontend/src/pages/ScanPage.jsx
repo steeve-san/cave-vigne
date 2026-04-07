@@ -1,14 +1,17 @@
 // src/pages/ScanPage.jsx
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { sommelierAPI, winesAPI } from '../services/api';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+const PROVIDER_LABELS = { anthropic: 'Claude', openai: 'ChatGPT', mistral: 'Mistral', openwebui: 'Local' };
+
 export default function ScanPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const { data: providerInfo } = useQuery({ queryKey: ['sommelier-providers'], queryFn: () => sommelierAPI.providers().then(r => r.data), staleTime: 60_000 });
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -82,7 +85,15 @@ export default function ScanPage() {
 
           {/* Camera / Upload */}
           <div className="card mb-3">
-            <div className="card-header"><h6 className="card-title">Analyser une étiquette</h6></div>
+            <div className="card-header d-flex align-items-center justify-content-between">
+              <h6 className="card-title mb-0">Analyser une étiquette</h6>
+              {providerInfo && (
+                <span style={{ fontSize: '0.72rem', color: 'var(--cv-text3)' }}>
+                  <i className="bi bi-cpu me-1" style={{ color: 'var(--cv-gold)' }}></i>
+                  {PROVIDER_LABELS[providerInfo.current] || providerInfo.current}
+                </span>
+              )}
+            </div>
             <div className="card-body">
               {/* Camera view */}
               {cameraOn && (

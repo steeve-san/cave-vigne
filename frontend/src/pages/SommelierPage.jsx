@@ -1,9 +1,12 @@
 // src/pages/SommelierPage.jsx
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { sommelierAPI } from '../services/api';
 import { useLang } from '../context/LangContext';
 import toast from 'react-hot-toast';
+
+const PROVIDER_LABELS = { anthropic: 'Claude', openai: 'ChatGPT', mistral: 'Mistral', openwebui: 'Local' };
+const PROVIDER_ICONS  = { anthropic: 'bi-stars', openai: 'bi-robot', mistral: 'bi-wind', openwebui: 'bi-server' };
 
 const CHIPS = ['Lasagnes au bœuf','Côte de bœuf grillée','Foie gras poêlé','Saint-Jacques snackées','Saumon fumé','Plateau fromages','Fondant chocolat','Huîtres fraîches','Agneau rôti','Poulet rôti','Pizza margherita','Sushi & sashimi','Tajine d\'agneau','Risotto aux champignons'];
 
@@ -17,6 +20,12 @@ export default function SommelierPage() {
   const [result, setResult] = useState(null);
   const [recipes, setRecipes] = useState(null);
   const [showRecipes, setShowRecipes] = useState(false);
+
+  const { data: providerInfo } = useQuery({
+    queryKey: ['sommelier-providers'],
+    queryFn: () => sommelierAPI.providers().then(r => r.data),
+    staleTime: 60_000,
+  });
 
   const mutation = useMutation({
     mutationFn: (q) => sommelierAPI.accord(q).then(r => r.data),
@@ -43,10 +52,16 @@ export default function SommelierPage() {
           <div className="card p-4">
             <div className="d-flex align-items-center gap-3 mb-3">
               <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(201,168,76,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.4rem', flexShrink:0 }}>✦</div>
-              <div>
+              <div style={{ flex: 1 }}>
                 <div className="font-serif" style={{ fontSize:'1.3rem', color:'var(--cv-gold)', fontStyle:'italic' }}>Votre sommelier personnel</div>
                 <div style={{ fontSize:'0.8rem', color:'var(--cv-text2)' }}>Entrez un plat ou un vin — je suggère les meilleurs accords depuis votre cave</div>
               </div>
+              {providerInfo && (
+                <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', textAlign: 'right', flexShrink: 0 }}>
+                  <i className={`bi ${PROVIDER_ICONS[providerInfo.current] || 'bi-cpu'} me-1`} style={{ color: 'var(--cv-gold)' }}></i>
+                  {PROVIDER_LABELS[providerInfo.current] || providerInfo.current}
+                </div>
+              )}
             </div>
             <div className="input-group mb-3">
               <input className="form-control form-control-lg" placeholder="Lasagnes, côte de bœuf, saumon, foie gras…" value={query}

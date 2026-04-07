@@ -213,6 +213,16 @@ async function migrate() {
     ['anthropic_key','',    'password','Clé API Anthropic'],
     ['public_catalog','0',  'boolean', 'Catalogue public (sans auth)'],
     ['require_email_verify','0','boolean','Vérification email obligatoire'],
+    // AI provider settings
+    ['ai_provider',   'anthropic','text',   'Fournisseur IA (anthropic|openai|mistral|openwebui)'],
+    ['anthropic_model','claude-sonnet-4-6','text','Modèle Anthropic'],
+    ['openai_key',    '',   'password','Clé API OpenAI'],
+    ['openai_model',  'gpt-4o-mini','text', 'Modèle OpenAI'],
+    ['mistral_key',   '',   'password','Clé API Mistral'],
+    ['mistral_model', 'mistral-small-latest','text','Modèle Mistral'],
+    ['openwebui_url', 'http://localhost:11434','text','URL OpenWebUI / Ollama'],
+    ['openwebui_key', '',   'text',    'API Key OpenWebUI (optionnel)'],
+    ['openwebui_model','llama3','text', 'Modèle OpenWebUI / Ollama'],
   ];
   for (const [key, val, type, label] of defaults) {
     await conn.query(
