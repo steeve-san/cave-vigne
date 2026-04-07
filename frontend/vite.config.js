@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [
-    react({ include: /\.(js|jsx|ts|tsx)$/ }),
+    react(),
   ],
   server: {
     port: 3000,
