@@ -3,18 +3,18 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 
 async function migrate() {
+  const DB_NAME = process.env.DB_NAME || 'cave_vigne';
+  console.log(`[migrate] Connexion à ${process.env.DB_HOST}:${process.env.DB_PORT || 3306} → base: ${DB_NAME}`);
+
+  // Connexion directe à la base — la base doit exister (créée par deploy.sh via root)
   const conn = await mysql.createConnection({
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    user: process.env.DB_USER,
+    host:     process.env.DB_HOST,
+    port:     process.env.DB_PORT || 3306,
+    user:     process.env.DB_USER,
     password: process.env.DB_PASSWORD,
+    database: DB_NAME,
     multipleStatements: true,
   });
-
-  await conn.query(
-    `CREATE DATABASE IF NOT EXISTS \`${process.env.DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
-  );
-  await conn.query(`USE \`${process.env.DB_NAME}\`;`);
 
   // Création tables (idempotente)
   const schema = `

@@ -55,5 +55,12 @@ async function seed() {
 
 seed().catch(err => {
   console.error('❌ Erreur seed:', err.message);
+  if (err.code === 'ER_NO_SUCH_TABLE') {
+    console.error('   → La table users n\'existe pas. Exécute d\'abord: npm run migrate');
+  } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+    console.error('   → Accès DB refusé. Vérifie DB_USER / DB_PASSWORD dans .env');
+  } else if (err.code === 'ECONNREFUSED') {
+    console.error('   → MariaDB ne répond pas. Vérifie que le service est démarré.');
+  }
   process.exit(1);
 });

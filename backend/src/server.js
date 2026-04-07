@@ -47,14 +47,54 @@ app.use('/api/wines', require('./routes/wines'));
 app.use('/api/spirits', require('./routes/spirits'));
 app.use('/api/sommelier', require('./routes/sommelier'));
 
-// Health check — public, no auth required
-app.get('/api/health', (_req, res) => res.json({
-  status: 'ok',
-  version: process.env.npm_package_version || '1.0.0',
-  env: process.env.NODE_ENV || 'development',
-  ts: new Date().toISOString(),
-  db: 'connected',
-}));
+// Health check — public, teste vraiment la DB
+app.get('/api/health', async (_req, res) => {
+  let dbStatus = 'ok';
+  try {
+    const db = require('./config/db');
+    await db.query('SELECT 1');
+  } catch (err) {
+    dbStatus = `error: ${err.code || err.message}`;
+  }
+  const status = dbStatus === 'ok' ? 'ok' : 'degraded';
+  res.status(status === 'ok' ? 200 : 503).json({
+    status,
+    version: process.env.npm_package_version || '1.1.0',
+    env:     process.env.NODE_ENV || 'development',
+    ts:      new Date().toISOString(),
+    db:      dbStatus,
+  });
+});
+
+// Debug — dev uniquement, liste les variables d'env (sans secrets)
+if (isDev) {
+  app.get('/api/debug', async (_req, res) => {
+    let dbStatus = 'ok'; let tables = [];
+    try {
+      const db = require('./config/db');
+      await db.query('SELECT 1');
+      const [rows] = await db.query("SHOW TABLES");
+      tables = rows.map(r => Object.values(r)[0]);
+    } catch (err) {
+      dbStatus = `${err.code}: ${err.message}`;
+    }
+    res.json({
+      env: {
+        NODE_ENV:         process.env.NODE_ENV,
+        PORT:             process.env.PORT,
+        DB_HOST:          process.env.DB_HOST,
+        DB_PORT:          process.env.DB_PORT,
+        DB_NAME:          process.env.DB_NAME,
+        DB_USER:          process.env.DB_USER,
+        DB_PASSWORD:      process.env.DB_PASSWORD ? '***set***' : '(empty)',
+        JWT_SECRET:       process.env.JWT_SECRET ? '***set***' : '(empty)',
+        ALLOWED_ORIGINS:  process.env.ALLOWED_ORIGINS,
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ? '***set***' : '(empty)',
+      },
+      db: { status: dbStatus, tables },
+    });
+  });
+}
 
 // 404
 app.use('/api/*', (_req, res) => res.status(404).json({ error: 'Route introuvable' }));
