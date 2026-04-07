@@ -7,6 +7,22 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
+## [1.4.0] — 2026-04-07
+
+### Ajouté
+
+- 🤖 **Multi-fournisseurs IA** — support Claude (Anthropic), ChatGPT (OpenAI), Mistral AI et OpenWebUI/Ollama ; sélectionnable depuis l'interface admin sans redémarrage
+- ⚙️ **Panneau IA admin** — configuration dynamique par provider (clé API, modèle, URL OpenWebUI)
+- 🏷️ **Badge provider actif** — indicateur du fournisseur IA courant dans SommelierPage et ScanPage
+
+### Backend
+- Nouveau module `backend/src/config/ai.js` — abstraction multi-provider (`callAI`, `callAIVision`, `checkAIAvailable`)
+- `GET /api/sommelier/providers` — liste les providers disponibles avec leur statut de configuration
+- 9 nouveaux paramètres `system_settings` : `ai_provider`, `anthropic_model`, `openai_key`, `openai_model`, `mistral_key`, `mistral_model`, `openwebui_url`, `openwebui_key`, `openwebui_model`
+- Vision : Anthropic et OpenAI GPT-4o natifs ; Mistral/OpenWebUI avec fallback texte
+
+---
+
 ## [1.3.0] — 2026-04-07
 
 ### Ajouté
@@ -110,11 +126,6 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## À venir
 
-- [ ] Import/export CSV de la cave
-- [ ] Notifications keep_until (rappel garder jusqu'à)
 - [ ] Application iOS (Swift WebView)
-- [ ] Mode hors-ligne avec Service Worker / PWA
-- [ ] Partage de cave entre utilisateurs
-- [ ] Graphiques statistiques avancés (Chart.js)
-- [ ] Mode dégustation (fiche de dégustation complète)
-- [ ] Recherche full-text (MariaDB FTS)
+- [ ] Partage de cave entre utilisateurs (caves partagées)
+- [ ] Recherche full-text améliorée (MariaDB FTS)

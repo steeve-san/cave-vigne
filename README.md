@@ -19,22 +19,26 @@
 
 | Fonctionnalité | Description |
 |---|---|
-| 🔐 **Authentification** | Inscription/connexion sécurisée, JWT access + refresh token |
+| 🔐 **Authentification** | Inscription/connexion sécurisée, JWT access + refresh token, réinitialisation mot de passe |
 | 🛡️ **2FA TOTP** | Double authentification (Google Authenticator, FreeOTP) |
-| 🍷 **Cave à vins** | CRUD complet, quantités, position, prix, millésime, infos domaine |
+| 🍷 **Cave à vins** | CRUD complet, quantités, position, prix, millésime, infos domaine, sélection multiple |
 | 🥃 **Spiritueux** | Whisky, rhum, cognac, armagnac, calvados, gin, vodka — avec statut ouvert/fermé |
 | 📸 **Photos bouteilles** | Photo étiquette + photo bouteille, infos domaine (site web, sol, altitude) |
-| ✦ **Sommelier IA** | Recommandations d'accords mets/vins depuis votre cave, via Claude |
-| 📷 **Scan d'étiquettes** | Caméra ou photo importée → Claude Vision extrait les infos automatiquement |
+| 🤖 **Sommelier IA multi-provider** | Accords mets/vins depuis la cave — Claude, ChatGPT, Mistral ou OpenWebUI/Ollama |
+| 📷 **Scan d'étiquettes** | Caméra ou photo importée → IA Vision extrait les infos automatiquement |
+| 📊 **Analyse IA de cave** | Score diversité/équilibre, points forts, occasion parfaite, axes d'amélioration |
 | 🔍 **Enrichissement** | Import automatique depuis Open Food Facts |
 | 🍽️ **Recettes associées** | Suggestions de recettes via TheMealDB |
+| 📓 **Journal de dégustation** | Notes par bouteille (robe, nez, bouche, finale, note /100) |
+| 💌 **Liste de souhaits** | Vins à acquérir avec priorité, budget max et lien boutique |
+| 📤 **Export / Import CSV** | Cave exportable et importable (compatible Excel) |
 | 🌍 **Carte mondiale** | Vignobles du monde avec vos bouteilles en surbrillance |
 | 🇫🇷 **Carte France** | Régions viticoles françaises avec cépages, AOC et vos stocks |
 | 🗺 **Carte spiritueux** | Origines mondiales de vos spiritueux |
 | ⭐ **Accords notés** | Notation 5 étoiles des accords mets/vin avec commentaire |
 | 🌐 **Catalogue public** | Mode visiteur sans authentification (configurable) |
-| ⚙️ **Admin** | Gestion clé API Anthropic, SMTP, catalogue public depuis l'UI |
-| 📱 **App Android** | Application WebView native (caméra, offline, swipe-to-refresh) |
+| ⚙️ **Admin** | Gestion multi-provider IA, SMTP, catalogue public depuis l'UI |
+| 📱 **PWA + App Android** | Installable sur mobile/desktop + WebView native (caméra, swipe-to-refresh) |
 
 ---
 
@@ -58,8 +62,8 @@
                     ┌─────────────┼──────────────┐
                     │             │              │
               ┌─────▼─────┐ ┌────▼────┐  ┌─────▼──────┐
-              │  MariaDB  │ │  Redis  │  │ Anthropic  │
-              │    12     │ │  :6379  │  │    API     │
+              │  MariaDB  │ │  Redis  │  │  AI APIs   │
+              │    12     │ │  :6379  │  │ (multi)    │
               └───────────┘ └─────────┘  └────────────┘
 ```
 
@@ -72,7 +76,7 @@
 | Backend | Node.js 24, Express 4, JWT, Multer, Sharp 0.34 |
 | Base de données | MariaDB 12 (mysql2 driver) |
 | Cache | Redis 7 |
-| IA | Claude Sonnet 4.6 (Anthropic) — Sommelier + Vision |
+| IA | Claude, ChatGPT, Mistral, OpenWebUI/Ollama — Sommelier + Vision |
 | Serveur web | Nginx |
 | CDN/Sécurité | Cloudflare |
 | Process manager | PM2 (cluster mode) |
@@ -87,7 +91,7 @@
 - Node.js 24+
 - MariaDB 12 (ou MySQL 8+)
 - Redis (optionnel, dégrade gracieusement)
-- Clé API Anthropic (pour Sommelier IA + Scan)
+- Clé API IA : Anthropic, OpenAI, Mistral, ou instance OpenWebUI (configurable depuis l'UI admin)
 
 ### 1. Backend
 
