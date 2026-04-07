@@ -18,7 +18,7 @@ pool.on('error', (err) => {
   console.error('[DB] Erreur pool:', err.code, err.message);
 });
 
-// Test de connexion au démarrage
+// Test connection on startup
 pool.getConnection()
   .then(conn => {
     console.log(`[DB] Connecté → ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}/${process.env.DB_NAME || 'cave_vigne'}`);

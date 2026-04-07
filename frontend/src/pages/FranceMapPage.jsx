@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { winesAPI } from '../services/api';
 import * as d3 from 'd3';
 
-// Coordonnées géographiques [lon, lat] des centres viticoles
+// Geographic coordinates [lon, lat] of wine region centres
 const FR_REGIONS = [
   {
     id: 'bordeaux', name: 'Bordeaux', lon: -0.57, lat: 44.84, r: 26,
@@ -81,7 +81,7 @@ function matchRegion(wine) {
   return null;
 }
 
-// GeoJSON France métropolitaine uniquement (gregoiredavid/france-geojson)
+// Metropolitan France only GeoJSON (gregoiredavid/france-geojson)
 const GEOJSON_URL =
   'https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/regions.geojson';
 
@@ -118,8 +118,8 @@ export default function FranceMapPage() {
       .catch(() => drawMap(svg, null));
 
     function drawMap(svg, geo) {
-      // Projection ajustée sur la France métropolitaine
-      // Étendue: lon [-5, 9.6], lat [41.3, 51.1]
+      // Projection fitted to metropolitan France
+      // Extent: lon [-5, 9.6], lat [41.3, 51.1]
       const proj = d3.geoMercator().fitExtent(
         [[20, 15], [W - 20, H - 15]],
         geo || {

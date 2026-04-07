@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const ThemeContext = createContext(null);
 
-// Détecte la préférence système
+// Detect system preference
 const getSystemTheme = () =>
   window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 
@@ -13,14 +13,14 @@ export function ThemeProvider({ children }) {
     return saved || 'system';
   });
 
-  // Thème effectif : résout 'system' vers dark/light
+  // Effective theme: resolves 'system' to dark/light
   const effective = theme === 'system' ? getSystemTheme() : theme;
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', effective);
   }, [effective]);
 
-  // Écoute les changements de préférence système si mode 'system'
+  // Listen for system preference changes when in 'system' mode
   useEffect(() => {
     if (theme !== 'system') return;
     const mq = window.matchMedia('(prefers-color-scheme: dark)');

@@ -35,7 +35,7 @@ export default function Layout() {
   const handleLogout = async () => { await logout(); toast.success('Au revoir !'); };
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
-  // Icône thème
+  // Theme icon
   const themeIcon = theme === 'dark' ? 'bi-moon-fill' : theme === 'light' ? 'bi-sun-fill' : 'bi-circle-half';
   const nextTheme = theme === 'system' ? 'dark' : theme === 'dark' ? 'light' : 'system';
 
@@ -80,7 +80,7 @@ export default function Layout() {
         ))}
       </nav>
 
-      {/* Contrôles thème + langue */}
+      {/* Theme + language controls */}
       <div className="px-3 py-2 d-flex align-items-center gap-2" style={{ borderTop: '0.5px solid var(--cv-border)' }}>
         <button
           className="btn-theme flex-grow-1 d-flex align-items-center gap-1 justify-content-center"

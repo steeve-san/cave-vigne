@@ -40,9 +40,9 @@ function PublicRoute({ children }) {
   return !user ? children : <Navigate to="/" replace />;
 }
 
-// Les visiteurs peuvent accéder à la cave en lecture seule
-// Si le catalogue public est activé côté serveur, les non-connectés voient aussi ces pages
-// (le backend refusera les données si public_catalog=0)
+// Visitors can access the cellar in read-only mode
+// If public catalog is enabled server-side, unauthenticated users can also view these pages
+// (backend will refuse data if public_catalog=0)
 function VisitorAllowed({ children }) {
   const { user, loading } = useAuth();
   if (loading) return (
@@ -50,8 +50,8 @@ function VisitorAllowed({ children }) {
       <div className="spinner-border" style={{ color: 'var(--cv-gold)' }} />
     </div>
   );
-  // Si l'utilisateur n'est pas connecté, rediriger vers /login
-  // Sauf si le catalogue public est activé — géré côté backend
+  // If the user is not logged in, redirect to /login
+  // Unless public catalog is enabled — handled server-side
   return user ? children : <Navigate to="/login" replace />;
 }
 
@@ -79,7 +79,7 @@ export default function App() {
                 <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
                 <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
 
-                {/* Routes accessibles à tous les rôles authentifiés */}
+                {/* Routes accessible to all authenticated roles */}
                 <Route path="/" element={<VisitorAllowed><Layout /></VisitorAllowed>}>
                   <Route index          element={<Dashboard />} />
                   <Route path="wines"   element={<WinesPage />} />
@@ -88,14 +88,14 @@ export default function App() {
                   <Route path="map/france"  element={<FranceMapPage />} />
                   <Route path="map/spirits" element={<SpiritsMapPage />} />
 
-                  {/* Réservé user + admin */}
+                  {/* Restricted to user + admin */}
                   <Route path="sommelier" element={<PrivateRoute><SommelierPage /></PrivateRoute>} />
                   <Route path="scan"      element={<PrivateRoute><ScanPage /></PrivateRoute>} />
 
-                  {/* Réservé admin */}
+                  {/* Admin only */}
                   <Route path="admin" element={<PrivateRoute requiredRole="admin"><AdminPage /></PrivateRoute>} />
 
-                  {/* Profil utilisateur */}
+                  {/* User profile */}
                   <Route path="profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
                 </Route>
               </Routes>

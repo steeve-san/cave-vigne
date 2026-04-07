@@ -6,7 +6,7 @@ async function migrate() {
   const DB_NAME = process.env.DB_NAME || 'cave_vigne';
   console.log(`[migrate] Connexion à ${process.env.DB_HOST}:${process.env.DB_PORT || 3306} → base: ${DB_NAME}`);
 
-  // Connexion directe à la base — la base doit exister (créée par deploy.sh via root)
+  // Direct connection — the database must already exist (created by deploy.sh as root)
   const conn = await mysql.createConnection({
     host:     process.env.DB_HOST,
     port:     process.env.DB_PORT || 3306,
@@ -16,7 +16,7 @@ async function migrate() {
     multipleStatements: true,
   });
 
-  // Création tables (idempotente)
+  // Create tables (idempotent)
   const schema = `
     CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -134,29 +134,29 @@ async function migrate() {
 
   await conn.query(schema);
 
-  // Mise à jour du schéma existant (idempotent)
+  // Update existing schema (idempotent)
   const alters = [
-    // Rôles utilisateur
+    // User roles
     `ALTER TABLE users MODIFY COLUMN role ENUM('visiteur','user','admin') DEFAULT 'user'`,
     // 2FA TOTP
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret VARCHAR(100)`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN DEFAULT FALSE`,
-    // Domaine & photos vins
+    // Domain & photos — wines
     `ALTER TABLE wines ADD COLUMN IF NOT EXISTS bottle_photo VARCHAR(500)`,
     `ALTER TABLE wines ADD COLUMN IF NOT EXISTS domain_website VARCHAR(500)`,
     `ALTER TABLE wines ADD COLUMN IF NOT EXISTS domain_description TEXT`,
     `ALTER TABLE wines ADD COLUMN IF NOT EXISTS soil_type VARCHAR(200)`,
     `ALTER TABLE wines ADD COLUMN IF NOT EXISTS altitude VARCHAR(100)`,
-    // Domaine & photos spiritueux
+    // Domain & photos — spirits
     `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS bottle_photo VARCHAR(500)`,
     `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS domain_website VARCHAR(500)`,
     `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS domain_description TEXT`,
   ];
   for (const sql of alters) {
-    try { await conn.query(sql); } catch { /* déjà à jour */ }
+    try { await conn.query(sql); } catch { /* already up to date */ }
   }
 
-  // Paramètres système par défaut
+  // Default system settings
   const defaults = [
     ['smtp_host',    '',    'text',    'Serveur SMTP'],
     ['smtp_port',    '587', 'text',    'Port SMTP'],

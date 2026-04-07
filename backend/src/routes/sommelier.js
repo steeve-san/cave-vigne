@@ -68,7 +68,7 @@ Priorité absolue aux bouteilles en cave. Score 1-5.`;
   }
 });
 
-// POST /api/sommelier/scan — analyse étiquette par image
+// POST /api/sommelier/scan — analyse wine label from image
 router.post('/scan', auth, upload.single('label'), async (req, res) => {
   if (!process.env.ANTHROPIC_API_KEY)
     return res.status(503).json({ error: 'Clé API Anthropic non configurée.' });
@@ -106,7 +106,7 @@ router.get('/history', auth, async (req, res) => {
   res.json(rows);
 });
 
-// GET /api/sommelier/recipes?food=NOM — suggestions recettes depuis TheMealDB (gratuit, sans clé)
+// GET /api/sommelier/recipes?food=NAME — recipe suggestions from TheMealDB (free, no key required)
 router.get('/recipes', auth, async (req, res) => {
   const { food } = req.query;
   if (!food) return res.status(400).json({ error: 'Paramètre food requis' });

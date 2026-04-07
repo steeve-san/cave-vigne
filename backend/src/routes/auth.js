@@ -68,7 +68,7 @@ router.post('/login', [
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Identifiants invalides' });
 
-    // Vérification 2FA TOTP si activé
+    // Verify 2FA TOTP if enabled
     if (user.totp_enabled) {
       const { totp_code } = req.body;
       if (!totp_code) return res.status(200).json({ requires_totp: true });
@@ -132,18 +132,18 @@ router.get('/me', auth, (req, res) => {
 });
 
 // ─── 2FA TOTP ─────────────────────────────────────────────────────────────────
-// POST /api/auth/totp/setup — génère un secret + QR code
+// POST /api/auth/totp/setup — generate a secret + QR code
 router.post('/totp/setup', auth, async (req, res) => {
   try {
     const secret = speakeasy.generateSecret({ name: `Cave & Vigne (${req.user.email})`, length: 20 });
-    // Stocke temporairement le secret (non encore activé)
+    // Temporarily store the secret (not yet activated)
     await db.query('UPDATE users SET totp_secret = ? WHERE id = ?', [secret.base32, req.user.id]);
     const qr = await qrcode.toDataURL(secret.otpauth_url);
     res.json({ secret: secret.base32, qr_code: qr, otpauth_url: secret.otpauth_url });
   } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
-// POST /api/auth/totp/confirm — confirme le code TOTP et active le 2FA
+// POST /api/auth/totp/confirm — confirm TOTP code and activate 2FA
 router.post('/totp/confirm', auth, async (req, res) => {
   const { token } = req.body;
   if (!token) return res.status(400).json({ error: 'Code requis' });
@@ -157,7 +157,7 @@ router.post('/totp/confirm', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
-// POST /api/auth/totp/disable — désactive le 2FA
+// POST /api/auth/totp/disable — disable 2FA
 router.post('/totp/disable', auth, async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Mot de passe requis' });
@@ -177,10 +177,10 @@ router.get('/totp/status', auth, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ADMIN — Gestion des utilisateurs (role: admin uniquement)
+// ADMIN — User management (admin role only)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// GET /api/auth/admin/users — liste tous les utilisateurs
+// GET /api/auth/admin/users — list all users
 router.get('/admin/users', auth, requireRole('admin'), async (req, res) => {
   try {
     const [users] = await db.query(
@@ -193,7 +193,7 @@ router.get('/admin/users', auth, requireRole('admin'), async (req, res) => {
   }
 });
 
-// POST /api/auth/admin/users — créer un utilisateur
+// POST /api/auth/admin/users — create a user
 router.post('/admin/users', auth, requireRole('admin'), [
   body('email').isEmail().normalizeEmail(),
   body('username').trim().isLength({ min: 2, max: 50 }),
@@ -220,12 +220,12 @@ router.post('/admin/users', auth, requireRole('admin'), [
   }
 });
 
-// PUT /api/auth/admin/users/:id — modifier rôle / statut
+// PUT /api/auth/admin/users/:id — update role / status
 router.put('/admin/users/:id', auth, requireRole('admin'), async (req, res) => {
   const { role, is_active } = req.body;
   const { id } = req.params;
 
-  // Empêcher de se rétrograder soi-même
+  // Prevent self-demotion
   if (parseInt(id) === req.user.id && role && role !== 'admin')
     return res.status(400).json({ error: 'Impossible de modifier votre propre rôle' });
 
@@ -251,7 +251,7 @@ router.put('/admin/users/:id', auth, requireRole('admin'), async (req, res) => {
   }
 });
 
-// DELETE /api/auth/admin/users/:id — désactiver (soft delete)
+// DELETE /api/auth/admin/users/:id — deactivate (soft delete)
 router.delete('/admin/users/:id', auth, requireRole('admin'), async (req, res) => {
   if (parseInt(req.params.id) === req.user.id)
     return res.status(400).json({ error: 'Impossible de supprimer votre propre compte' });

@@ -27,7 +27,7 @@ const auth = async (req, res, next) => {
   }
 };
 
-// Middleware de vérification de rôle — usage: requireRole('admin') ou requireRole('user','admin')
+// Role check middleware — usage: requireRole('admin') or requireRole('user','admin')
 const requireRole = (...roles) => (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'Non authentifié' });
   if (!roles.includes(req.user.role))
@@ -35,7 +35,7 @@ const requireRole = (...roles) => (req, res, next) => {
   next();
 };
 
-// Middleware auth optionnel — ne bloque pas si pas de token, mais remplit req.user si présent
+// Optional auth middleware — does not block if no token, but populates req.user when present
 const optionalAuth = async (req, _res, next) => {
   try {
     const header = req.headers.authorization;

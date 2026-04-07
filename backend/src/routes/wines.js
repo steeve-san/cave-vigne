@@ -42,12 +42,12 @@ router.get('/', optionalAuth, async (req, res) => {
     let where = [];
     let params = [];
 
-    // Filtre selon le rôle
+    // Filter based on role
     if (role === 'user') {
       where.push('w.user_id = ?');
       params.push(req.user.id);
     } else if (role === 'guest') {
-      // Catalogue public : vérifier que le catalogue public est activé
+      // Public catalog: check that public catalog is enabled
       const [cfg] = await db.query(
         `SELECT setting_value FROM system_settings WHERE setting_key = 'public_catalog'`
       );
@@ -238,7 +238,7 @@ router.get('/stats', auth, async (req, res) => {
 });
 
 // ─── GET /api/wines/:id/enrich — enrichissement depuis sources externes ────────
-// Open Food Facts (gratuit, sans clé) + Wine-Searcher si configuré
+// Open Food Facts (free, no key required) + Wine-Searcher if configured
 router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) => {
   try {
     const [wines] = await db.query('SELECT * FROM wines WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);

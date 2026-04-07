@@ -6,8 +6,8 @@ import en from '../locales/en';
 const locales = { fr, en };
 const LangContext = createContext(null);
 
-// Résout une clé dot-notation dans un objet imbriqué
-// Ex: t('wines.title') → 'Ma cave à vins'
+// Resolve a dot-notation key in a nested object
+// e.g. t('wines.title') → 'My wine cellar'
 const resolve = (obj, key) => {
   const value = key.split('.').reduce((acc, part) => acc?.[part], obj);
   return value ?? key;
@@ -17,7 +17,7 @@ export function LangProvider({ children }) {
   const [lang, setLang] = useState(() => {
     const saved = localStorage.getItem('cv_lang');
     if (saved && locales[saved]) return saved;
-    // Détection langue navigateur
+    // Detect browser language
     const browser = navigator.language?.split('-')[0];
     return locales[browser] ? browser : 'fr';
   });
@@ -28,7 +28,7 @@ export function LangProvider({ children }) {
     localStorage.setItem('cv_lang', l);
   };
 
-  // Fonction de traduction avec support variables {name}
+  // Translation function with {name} variable support
   const t = (key, vars = {}) => {
     let text = resolve(locales[lang], key);
     if (typeof text !== 'string') return key;

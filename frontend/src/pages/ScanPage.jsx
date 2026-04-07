@@ -38,7 +38,7 @@ export default function ScanPage() {
   const onDrop = useCallback((files) => { if (files[0]) analyse(files[0]); }, []);
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: { 'image/*': [] }, maxFiles: 1, noClick: false });
 
-  // Attache le stream après que <video> soit monté (cameraOn=true déclenche le rendu)
+  // Attach the stream after <video> is mounted (cameraOn=true triggers render)
   useEffect(() => {
     if (cameraOn && videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
@@ -50,7 +50,7 @@ export default function ScanPage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } });
       streamRef.current = stream;
-      setCameraOn(true); // monte <video> → useEffect l'attache ensuite
+      setCameraOn(true); // mounts <video> → useEffect attaches the stream
     } catch (err) { toast.error('Impossible d\'accéder à la caméra : ' + err.message); }
   };
 

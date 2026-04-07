@@ -16,7 +16,7 @@ function RoleBadge({ role, t }) {
   );
 }
 
-// ─── Onglet Paramètres ────────────────────────────────────────────────────────
+// ─── Settings Tab ─────────────────────────────────────────────────────────────
 function SettingsTab() {
   const { t } = useLang();
   const qc = useQueryClient();
@@ -335,7 +335,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Descriptions des rôles */}
+      {/* Role descriptions */}
       <div className="row g-3 mt-2">
         {ROLES.map(role => (
           <div key={role} className="col-md-4">
@@ -353,7 +353,7 @@ export default function AdminPage() {
 
       </>}
 
-      {/* Modal création utilisateur */}
+      {/* Create user modal */}
       {showModal && (
         <div className="modal show d-block" style={{ background: 'var(--cv-modal-overlay)' }}>
           <div className="modal-dialog modal-dialog-centered">
