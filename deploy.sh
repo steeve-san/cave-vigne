@@ -139,6 +139,7 @@ read -rsp "Mot de passe admin (min 8 chars) : " ADMIN_PASSWORD; echo
 [[ ${#ADMIN_PASSWORD} -lt 8 ]] && error "Mot de passe admin trop court."
 
 JWT_SECRET=$(openssl rand -hex 64 2>/dev/null || tr -dc 'A-Za-z0-9' </dev/urandom | head -c 128)
+DEBUG_TOKEN=$(openssl rand -hex 16 2>/dev/null || tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
 PROTO=$( [[ "$USE_SSL" == "true" ]] && echo "https" || echo "http" )
 
 echo ""
@@ -413,6 +414,7 @@ DB_PASSWORD=${DB_PASSWORD}
 JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRES_IN=7d
 JWT_REFRESH_EXPIRES_IN=30d
+DEBUG_TOKEN=${DEBUG_TOKEN}
 
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
@@ -476,8 +478,8 @@ if [[ "$USE_SSL" == "true" ]]; then
     warn "Certbot a échoué — DNS configuré ? Lance après : certbot --nginx -d ${DOMAIN} --email ${SSL_EMAIL} --agree-tos"
   fi
 
-  (crontab -l 2>/dev/null | grep -v certbot; \
-    echo "0 3 * * * /usr/bin/certbot renew --quiet --deploy-hook 'systemctl reload nginx'") | crontab -
+  { crontab -l 2>/dev/null | grep -v certbot || true; \
+    echo "0 3 * * * /usr/bin/certbot renew --quiet --deploy-hook 'systemctl reload nginx'"; } | crontab -
   success "Renouvellement SSL automatique (cron 3h)"
 else
   section "8/9 — SSL ignoré (mode HTTP)"
@@ -500,8 +502,8 @@ success "UFW configuré"
 
 # ─── Backup automatique MariaDB ───────────────────────────────────────────────
 mkdir -p /var/backups/cave-vigne
-(crontab -l 2>/dev/null | grep -v cave_vigne; \
-  echo "0 3 * * * mysqldump -u cave_user -p'${DB_PASSWORD}' cave_vigne | gzip > /var/backups/cave-vigne/cave_\$(date +\%Y\%m\%d).sql.gz && find /var/backups/cave-vigne -mtime +30 -delete") | crontab -
+{ crontab -l 2>/dev/null | grep -v cave_vigne || true; \
+  echo "0 3 * * * mysqldump -u cave_user -p'${DB_PASSWORD}' cave_vigne | gzip > /var/backups/cave-vigne/cave_\$(date +\%Y\%m\%d).sql.gz && find /var/backups/cave-vigne -mtime +30 -delete"; } | crontab -
 success "Backup MariaDB quotidien (3h, rétention 30j)"
 
 # ─── Création du premier administrateur ──────────────────────────────────────
@@ -521,7 +523,7 @@ echo -e "  ${GREEN}Logs PM2${NC}     : pm2 logs cave-vigne-api"
 echo -e "  ${GREEN}Logs Nginx${NC}   : tail -f /var/log/nginx/${DOMAIN}_error.log"
 echo -e "  ${GREEN}Backups DB${NC}   : /var/backups/cave-vigne/"
 echo ""
-echo -e "  ${YELLOW}JWT_SECRET${NC} (à sauvegarder) :"
-echo -e "  ${JWT_SECRET}"
+echo -e "  ${YELLOW}JWT_SECRET${NC}   (à sauvegarder) : ${JWT_SECRET}"
+echo -e "  ${YELLOW}DEBUG_TOKEN${NC}  (endpoint debug) : ${PROTO}://${DOMAIN}/api/debug?token=${DEBUG_TOKEN}"
 echo ""
 pm2 status
