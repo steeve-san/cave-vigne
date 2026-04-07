@@ -88,7 +88,12 @@ Si ce n'est pas une étiquette de vin: {"error":"not_wine"}` }
     catch { result = { error: 'parse_error' }; }
 
     res.json(result);
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur analyse' }); }
+  } catch (err) {
+    console.error('[scan] error:', err);
+    const msg = err.message || 'Erreur analyse';
+    const hint = msg.includes('sharp') || msg.includes('native') ? ' (essaie: cd backend && npm rebuild sharp)' : '';
+    res.status(500).json({ error: `Erreur analyse: ${msg}${hint}` });
+  }
 });
 
 // GET /api/sommelier/history
