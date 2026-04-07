@@ -61,7 +61,11 @@ Priorité absolue aux bouteilles en cave. Score 1-5.`;
     await db.query('INSERT INTO sommelier_sessions (user_id, query, result) VALUES (?,?,?)', [req.user.id, query, JSON.stringify(result)]);
     await cacheSet(cacheKey, result, 1800);
     res.json(result);
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur service IA' }); }
+  } catch (err) {
+    console.error('[accord] error:', err);
+    const msg = err.message || 'Erreur service IA';
+    res.status(500).json({ error: msg });
+  }
 });
 
 // POST /api/sommelier/scan — analyse étiquette par image
