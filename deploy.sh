@@ -70,11 +70,11 @@ if [[ "$UPDATE_MODE" == "true" ]]; then
   # ── Mise à jour frontend ──
   section "2/3 — Build frontend"
   cd "${SCRIPT_DIR}/frontend"
-  # Récupérer REACT_APP_API_URL depuis build existant si .env.production absent
-  if [[ ! -f .env.production ]]; then
-    PROTO=$(grep "^API_URL=" "${APP_DIR}/backend/.env" | cut -d= -f2 | sed 's|://.*||' || echo "https")
-    echo "REACT_APP_API_URL=${PROTO}://${DOMAIN}/api" > .env.production
-  fi
+  # Supprimer .env.local (priorité CRA > .env.production) pour éviter localhost dans le build
+  rm -f .env.local
+  # Reconstruire .env.production à partir du .env backend
+  PROTO_UPDATE=$(grep "^ALLOWED_ORIGINS=" "${APP_DIR}/backend/.env" | head -1 | grep -o 'https\?' | head -1 || echo "http")
+  echo "REACT_APP_API_URL=${PROTO_UPDATE}://${DOMAIN}/api" > .env.production
   npm install --quiet
   npm run build
   cp -r build/. "${APP_DIR}/frontend/build/"
@@ -425,7 +425,7 @@ ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 UPLOAD_DIR=./uploads
 MAX_FILE_SIZE=10485760
 
-ALLOWED_ORIGINS=${PROTO}://${DOMAIN}
+ALLOWED_ORIGINS=http://${DOMAIN},https://${DOMAIN}
 ENV
 chmod 600 "${APP_DIR}/backend/.env"
 success ".env backend généré"
@@ -437,6 +437,8 @@ success "Dépendances backend installées + migration DB"
 
 # Build frontend
 cd "${SCRIPT_DIR}/frontend"
+# Supprimer .env.local (priorité CRA > .env.production) pour éviter localhost dans le build
+rm -f .env.local
 cat > .env.production <<FENV
 REACT_APP_API_URL=${PROTO}://${DOMAIN}/api
 FENV
