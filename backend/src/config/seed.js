@@ -1,4 +1,4 @@
-// src/config/seed.js — Création du premier administrateur
+// src/config/seed.js — Create the first administrator
 require('dotenv').config();
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
@@ -12,7 +12,7 @@ async function seed() {
     database: process.env.DB_NAME,
   });
 
-  // Vérification : admin déjà existant ?
+  // Check if an admin already exists
   const [admins] = await conn.query("SELECT id, email FROM users WHERE role = 'admin' LIMIT 1");
   if (admins.length) {
     console.log(`ℹ️  Admin déjà présent : ${admins[0].email}`);
@@ -20,9 +20,9 @@ async function seed() {
     return;
   }
 
-  // Récupération des paramètres (args CLI ou env)
+  // Read parameters from CLI args or env vars
   const rawEmail = process.argv[2] || process.env.ADMIN_EMAIL;
-  // Normalisation identique à express-validator normalizeEmail() : lowercase
+  // Normalise the same way as express-validator normalizeEmail(): lowercase
   const email    = rawEmail ? rawEmail.toLowerCase().trim() : rawEmail;
   const username = process.argv[3] || process.env.ADMIN_USERNAME;
   const password = process.argv[4] || process.env.ADMIN_PASSWORD;
