@@ -17,7 +17,7 @@ function PhotoPicker({ label, current, onChange, t }) {
     onChange(f);
     const r = new FileReader(); r.onload = ev => setPreview(ev.target.result); r.readAsDataURL(f);
   };
-  const API_BASE = process.env.REACT_APP_API_URL?.replace('/api','') || '';
+  const API_BASE = import.meta.env.REACT_APP_API_URL?.replace('/api','') || '';
   const src = preview?.startsWith('data:') ? preview : preview ? `${API_BASE}${preview}` : null;
   return (
     <div>
