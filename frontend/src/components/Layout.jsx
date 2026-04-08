@@ -15,7 +15,8 @@ export default function Layout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const isReadOnly = user?.role === 'visiteur';
+  // Non-authenticated visitors (public catalog) are treated as read-only
+  const isReadOnly = !user || user?.role === 'visiteur';
   const isAdmin    = user?.role === 'admin';
 
   const { data: wStats }  = useQuery({ queryKey: ['wine-stats'],    queryFn: () => winesAPI.stats().then(r => r.data),   staleTime: 120_000 });
@@ -104,37 +105,54 @@ export default function Layout() {
 
       {/* Profil utilisateur */}
       <div className="p-3" style={{ borderTop: '0.5px solid var(--cv-border)' }}>
-        <div className="d-flex align-items-center gap-2 mb-2">
-          <div style={{
-            width: 32, height: 32, borderRadius: '50%',
-            background: roleColors[user?.role] || 'var(--cv-wine)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, color: user?.role === 'visiteur' ? '#fff' : '#1a0f0f', fontWeight: 600
-          }}>
-            {(user?.username || 'U')[0].toUpperCase()}
-          </div>
-          <div className="flex-grow-1 overflow-hidden">
-            <div style={{ fontSize: '0.82rem', color: 'var(--cv-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {user?.username}
+        {user ? (
+          <>
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%',
+                background: roleColors[user.role] || 'var(--cv-wine)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, color: user.role === 'visiteur' ? '#fff' : '#1a0f0f', fontWeight: 600
+              }}>
+                {(user.username || 'U')[0].toUpperCase()}
+              </div>
+              <div className="flex-grow-1 overflow-hidden">
+                <div style={{ fontSize: '0.82rem', color: 'var(--cv-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {user.username}
+                </div>
+                <span className={`badge-type ${roleBadgeClass[user.role] || ''}`} style={{ fontSize: '0.62rem' }}>
+                  {t(`admin.roles.${user.role}`)}
+                </span>
+              </div>
             </div>
-            <span className={`badge-type ${roleBadgeClass[user?.role] || ''}`} style={{ fontSize: '0.62rem' }}>
-              {t(`admin.roles.${user?.role}`)}
-            </span>
-          </div>
-        </div>
-        {isReadOnly && (
-          <div style={{ fontSize: '0.68rem', color: 'var(--cv-text3)', marginBottom: '0.5rem', textAlign: 'center' }}>
-            <i className="bi bi-eye me-1"></i>{t('nav.readOnly')}
+            {user.role === 'visiteur' && (
+              <div style={{ fontSize: '0.68rem', color: 'var(--cv-text3)', marginBottom: '0.5rem', textAlign: 'center' }}>
+                <i className="bi bi-eye me-1"></i>{t('nav.readOnly')}
+              </div>
+            )}
+            <div className="d-flex gap-2 mb-2">
+              <NavLink to="/profile" className="btn btn-sm btn-outline-gold flex-grow-1" style={{ fontSize: '0.78rem' }}>
+                <i className="bi bi-person-gear me-1"></i>{t('nav.profile')}
+              </NavLink>
+            </div>
+            <button className="btn btn-sm btn-outline-gold w-100" onClick={handleLogout}>
+              <i className="bi bi-box-arrow-right me-1"></i>{t('auth.logout')}
+            </button>
+          </>
+        ) : (
+          /* Visiteur anonyme — catalogue public */
+          <div className="d-flex flex-column gap-2">
+            <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', textAlign: 'center' }}>
+              <i className="bi bi-eye me-1"></i>{t('nav.readOnly')}
+            </div>
+            <NavLink to="/login" className="btn btn-sm btn-outline-gold w-100" style={{ fontSize: '0.78rem' }}>
+              <i className="bi bi-box-arrow-in-right me-1"></i>{t('auth.login')}
+            </NavLink>
+            <NavLink to="/register" className="btn btn-sm btn-gold w-100" style={{ fontSize: '0.78rem' }}>
+              <i className="bi bi-person-plus me-1"></i>{t('auth.registerBtn')}
+            </NavLink>
           </div>
         )}
-        <div className="d-flex gap-2 mb-2">
-          <NavLink to="/profile" className="btn btn-sm btn-outline-gold flex-grow-1" style={{ fontSize: '0.78rem' }}>
-            <i className="bi bi-person-gear me-1"></i>{t('nav.profile')}
-          </NavLink>
-        </div>
-        <button className="btn btn-sm btn-outline-gold w-100" onClick={handleLogout}>
-          <i className="bi bi-box-arrow-right me-1"></i>{t('auth.logout')}
-        </button>
       </div>
     </>
   );

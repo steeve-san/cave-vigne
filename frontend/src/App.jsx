@@ -1,11 +1,29 @@
 // src/App.jsx
-import React from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { LangProvider } from './context/LangContext';
+import { adminAPI } from './services/api';
+
+// ── Public config context — fetched once, no auth required ────────────────────
+const PublicConfigContext = createContext({ public_catalog: '0' });
+export function usePublicConfig() { return useContext(PublicConfigContext); }
+
+function PublicConfigProvider({ children }) {
+  const [cfg, setCfg] = useState(null);
+  useEffect(() => {
+    adminAPI.publicConfig().then(r => setCfg(r.data)).catch(() => setCfg({ public_catalog: '0' }));
+  }, []);
+  if (cfg === null) return (
+    <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh', background: 'var(--cv-bg)' }}>
+      <div className="spinner-border" style={{ color: 'var(--cv-gold)' }} />
+    </div>
+  );
+  return <PublicConfigContext.Provider value={cfg}>{children}</PublicConfigContext.Provider>;
+}
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -45,19 +63,17 @@ function PublicRoute({ children }) {
   return !user ? children : <Navigate to="/" replace />;
 }
 
-// Visitors can access the cellar in read-only mode
-// If public catalog is enabled server-side, unauthenticated users can also view these pages
-// (backend will refuse data if public_catalog=0)
+// Routes accessible to authenticated users, OR to unauthenticated visitors when public_catalog=1
 function VisitorAllowed({ children }) {
   const { user, loading } = useAuth();
+  const { public_catalog } = usePublicConfig();
   if (loading) return (
     <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh', background: 'var(--cv-bg)' }}>
       <div className="spinner-border" style={{ color: 'var(--cv-gold)' }} />
     </div>
   );
-  // If the user is not logged in, redirect to /login
-  // Unless public catalog is enabled — handled server-side
-  return user ? children : <Navigate to="/login" replace />;
+  if (!user && public_catalog !== '1') return <Navigate to="/login" replace />;
+  return children;
 }
 
 export default function App() {
@@ -65,6 +81,7 @@ export default function App() {
     <ThemeProvider>
       <LangProvider>
         <QueryClientProvider client={qc}>
+          <PublicConfigProvider>
           <AuthProvider>
             <BrowserRouter>
               <Toaster
@@ -111,6 +128,7 @@ export default function App() {
               </Routes>
             </BrowserRouter>
           </AuthProvider>
+          </PublicConfigProvider>
         </QueryClientProvider>
       </LangProvider>
     </ThemeProvider>
