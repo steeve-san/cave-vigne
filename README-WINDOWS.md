@@ -21,9 +21,9 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 | Logiciel | Version | Téléchargement |
 |----------|---------|----------------|
-| **Node.js** | 20 LTS | https://nodejs.org/fr/ |
+| **Node.js** | 24 LTS | https://nodejs.org/fr/ |
 | **Git** | Dernier | https://git-scm.com/download/win |
-| **MariaDB** | 11+ | https://mariadb.org/download/ |
+| **MariaDB** | 12+ | https://mariadb.org/download/ |
 | **Redis** (Memurai) | Dernier | https://www.memurai.com/get-memurai |
 | **VS Code** | Dernier | https://code.visualstudio.com/ |
 
@@ -235,3 +235,22 @@ Divisez le terminal VS Code : icône "+" → "Split Terminal"
 | Better Comments | Commentaires colorés |
 | Kotlin | Support Android |
 | Git Graph | Visualiser l'historique |
+
+---
+
+## 🆕 Scripts utiles (v1.6+)
+
+```bash
+# Import cache local code-barres Open Food Facts (⚠ 3 Go téléchargement)
+cd backend
+npm run import:off             # Télécharge + importe le dump JSONL
+
+# Lookup barcode unitaire (sans télécharger le dump)
+node src/jobs/importOpenFoodFacts.js --ean 3760076020079
+
+# Re-télécharger le dump
+npm run import:off:refresh
+```
+
+> Sans import, le lookup temps-réel fonctionne automatiquement :  
+> OFF API → Vivino → Oeni → Liv-ex → cache BDD local.

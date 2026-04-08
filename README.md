@@ -40,14 +40,17 @@
 | ⚙️ **Admin** | Gestion multi-provider IA, SMTP, catalogue public depuis l'UI |
 | 📱 **PWA + App Android** | Installable sur mobile/desktop + WebView native (caméra, swipe-to-refresh) |
 | 🍎 **App iOS** | Application SwiftUI (WKWebView) — caméra, swipe-back, hors-ligne |
-| 🏚️ **Caves partagées** | Invitations par email, accès lecture seule, gestion des permissions |
+| 🏚️ **Caves partagées** | Invitations par email, permissions **lecture ou écriture collaborative** (ajouter/modifier/supprimer/toggle), gestion des accès |
 | 📈 **Historique valeur** | Snapshot quotidien + graphique d'évolution sur 90 jours |
 | ⏳ **Tracker de maturité** | Vins classés : à l'apogée, approche, trop jeune, passé prime |
 | 🔴 **Alerte dernière bouteille** | Badge rouge quand il ne reste qu'une bouteille |
-| 📦 **Code-barres EAN** | Scanner le code EAN pour pré-remplir depuis Open Food Facts |
+| 📦 **Scanner code-barres** | Caméra (BarcodeDetector) ou saisie : EAN-8/13, **ITF-14 cartons/caisses**, UPC, Code 128 → pré-remplit formulaire vin ou spiritueux |
+| 🗄️ **Cache barcode local** | Import bulk Open Food Facts (dump JSONL) → lookup instantané offline ; fallback Vivino / Oeni / Liv-ex |
+| 🧊 **Vue 3D des casiers** | Rendu CSS3D, rotation par glisser, bouteilles colorées par type, détail au clic |
 | 📄 **Export PDF** | Impression de la cave filtrée (tableau stylisé via window.print) |
 | 🌙 **"Que boire ce soir ?"** | L'IA choisit dans votre cave selon occasion, convives, envie |
 | 🔎 **Région spotlight** | Analyse IA d'une région viticole depuis la carte France |
+| 🌐 **Catalogue public** | Visiteurs non connectés peuvent consulter la cave si activé (VisitorAllowed sans redirection login) |
 
 ---
 
@@ -82,7 +85,7 @@
 |--------|-------------|
 | Frontend | React 19, Bootstrap 5, React Query v5, D3.js, Axios |
 | Build | Vite 6 + @vitejs/plugin-react |
-| Backend | Node.js 24, Express 4, JWT, Multer, Sharp 0.34 |
+| Backend | Node.js 24, Express 4, JWT, Multer, Sharp 0.34, Cheerio |
 | Base de données | MariaDB 12 (mysql2 driver) |
 | Cache | Redis 7 |
 | IA | Claude, ChatGPT, Mistral, OpenWebUI/Ollama — Sommelier + Vision |
@@ -170,12 +173,18 @@ cave-vigne/
 │   │   │   └── auth.js         # Vérification JWT + optionalAuth
 │   │   ├── routes/
 │   │   │   ├── auth.js         # Login, register, refresh, 2FA TOTP, reset password
-│   │   │   ├── wines.js        # CRUD vins + accords + enrichissement + ai-enrich
-│   │   │   ├── spirits.js      # CRUD spiritueux
-│   │   │   ├── sommelier.js    # IA accord + scan + recettes TheMealDB
+│   │   │   ├── wines.js        # CRUD vins + accords + enrichissement + barcode (cache→OFF→scrapers)
+│   │   │   ├── spirits.js      # CRUD spiritueux + barcode
+│   │   │   ├── sharing.js      # Caves partagées (read/write) + invitations + permissions
+│   │   │   ├── sommelier.js    # IA accord + scan + recettes + recommend + region-spotlight
 │   │   │   ├── tasting.js      # Journal de dégustation par bouteille
 │   │   │   ├── wishlist.js     # Liste de souhaits
 │   │   │   └── settings.js     # Config admin (IA, SMTP, catalogue)
+│   │   ├── services/
+│   │   │   └── wineScraper.js  # Fallback EAN : UPC ItemDB → Vivino → Oeni → Liv-ex
+│   │   ├── jobs/
+│   │   │   ├── notifications.js        # Cron quotidien keep_until + valeur cave
+│   │   │   └── importOpenFoodFacts.js  # Import bulk dump JSONL → barcode_cache
 │   │   └── server.js           # Point d'entrée Express
 │   ├── ecosystem.config.js     # Config PM2
 │   ├── .env.example
@@ -189,27 +198,30 @@ cave-vigne/
 │   │   └── sw.js               # Service Worker (cache-first)
 │   ├── src/
 │   │   ├── components/
-│   │   │   └── Layout.jsx      # Sidebar + Topbar responsive
+│   │   │   ├── Layout.jsx               # Sidebar + Topbar responsive
+│   │   │   └── BarcodeScannerModal.jsx  # Caméra BarcodeDetector + saisie, EAN/ITF-14/UPC
 │   │   ├── context/
 │   │   │   └── AuthContext.jsx # Auth state global
 │   │   ├── locales/
 │   │   │   ├── fr.js           # Traductions françaises
 │   │   │   └── en.js           # Traductions anglaises
 │   │   ├── pages/
-│   │   │   ├── Login.jsx       # + lien "Mot de passe oublié"
+│   │   │   ├── Login.jsx              # + lien "Mot de passe oublié"
 │   │   │   ├── Register.jsx
 │   │   │   ├── ForgotPassword.jsx
 │   │   │   ├── ResetPassword.jsx
-│   │   │   ├── Dashboard.jsx   # Donut Chart.js + analyse IA cave
-│   │   │   ├── WinesPage.jsx   # CRUD + dégustation + enrichissement IA/web + bulk ops
-│   │   │   ├── SpiritsPage.jsx
+│   │   │   ├── Dashboard.jsx          # Donut Chart.js + valeur + maturité + analyse IA
+│   │   │   ├── WinesPage.jsx          # CRUD + dégustation + barcode + enrichissement + PDF + bulk
+│   │   │   ├── SpiritsPage.jsx        # CRUD + barcode scan
+│   │   │   ├── CellarPage.jsx         # Vue 3D des casiers (CSS3D, drag-to-rotate)
+│   │   │   ├── SharedCavesPage.jsx    # Caves partagées (invite, lecture/écriture collaborative)
 │   │   │   ├── WishlistPage.jsx
-│   │   │   ├── SommelierPage.jsx # + badge provider actif
-│   │   │   ├── ScanPage.jsx    # + badge provider actif
-│   │   │   ├── ProfilePage.jsx # Profil + 2FA
-│   │   │   ├── AdminPage.jsx   # Admin : utilisateurs + paramètres IA multi-provider
+│   │   │   ├── SommelierPage.jsx      # Accord + "ce soir ?" + badge provider
+│   │   │   ├── ScanPage.jsx           # Vision IA + badge provider
+│   │   │   ├── ProfilePage.jsx        # Profil + 2FA
+│   │   │   ├── AdminPage.jsx          # Utilisateurs + paramètres IA multi-provider
 │   │   │   ├── WorldMapPage.jsx
-│   │   │   ├── FranceMapPage.jsx
+│   │   │   ├── FranceMapPage.jsx      # + région spotlight IA
 │   │   │   └── SpiritsMapPage.jsx
 │   │   ├── services/
 │   │   │   └── api.js          # Axios + auto-refresh JWT
@@ -313,7 +325,7 @@ Les contributions sont les bienvenues ! Pour contribuer :
 
 - [ ] Recherche full-text avancée (facets, ElasticSearch)
 - [ ] Application iOS — distribution App Store (compte Developer requis)
-- [ ] Caves partagées en écriture collaborative
+- [ ] Notifications push (PWA + mobile) pour les rappels keep_until
 
 ---
 
@@ -329,7 +341,8 @@ Ce projet est sous licence **MIT** — voir [LICENSE](./LICENSE) pour les détai
 - **D3.js** — Cartes interactives
 - **Bootstrap 5** — Interface utilisateur
 - **Chart.js** — Graphiques et statistiques
-- **Open Food Facts** — Enrichissement des données vin
+- **Open Food Facts** — Enrichissement et cache barcode local
+- **Vivino / Oeni / Liv-ex** — Scrapers fallback lookup EAN
 - **TheMealDB** — Suggestions de recettes associées
 
 ---
