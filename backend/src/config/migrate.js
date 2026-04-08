@@ -205,6 +205,24 @@ async function migrate() {
       INDEX idx_guest (guest_id),
       INDEX idx_token (token(50))
     ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS barcode_cache (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      ean VARCHAR(20) NOT NULL,
+      name VARCHAR(255),
+      producer VARCHAR(255),
+      vintage SMALLINT,
+      type VARCHAR(50),
+      region VARCHAR(255),
+      country VARCHAR(100),
+      grapes TEXT,
+      notes TEXT,
+      label_url VARCHAR(500),
+      source ENUM('off','vivino','oeni','livex','manual') DEFAULT 'off',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY idx_ean (ean)
+    ) ENGINE=InnoDB;
   `;
 
   await conn.query(schema);

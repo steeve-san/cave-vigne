@@ -23,6 +23,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import WishlistPage from './pages/WishlistPage';
 import SharedCavesPage from './pages/SharedCavesPage';
+import CellarPage from './pages/CellarPage';
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, retry: 1 } } });
 
@@ -99,6 +100,7 @@ export default function App() {
                   <Route path="scan"      element={<PrivateRoute><ScanPage /></PrivateRoute>} />
                   <Route path="wishlist"  element={<PrivateRoute><WishlistPage /></PrivateRoute>} />
                   <Route path="sharing"  element={<PrivateRoute><SharedCavesPage /></PrivateRoute>} />
+                  <Route path="cellar"   element={<PrivateRoute><CellarPage /></PrivateRoute>} />
 
                   {/* Admin only */}
                   <Route path="admin" element={<PrivateRoute requiredRole="admin"><AdminPage /></PrivateRoute>} />

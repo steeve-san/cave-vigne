@@ -43,6 +43,7 @@ export default function Layout() {
     { path: '/sommelier', icon: 'bi-stars',     label: t('nav.sommelier'), section: t('nav.discovery'), hide: isReadOnly },
     { path: '/',          icon: 'bi-house',      label: t('nav.dashboard'), section: t('nav.collection') },
     { path: '/wines',     icon: 'bi-grid-3x3',   label: t('nav.wines'),     badge: wineCount || null },
+    { path: '/cellar',    icon: 'bi-grid-3x3-gap-fill', label: t('nav.cellar') },
     { path: '/scan',      icon: 'bi-camera',     label: t('nav.scan'),      hide: isReadOnly },
     { path: '/map/france',icon: 'bi-geo-alt',    label: t('nav.mapFrance') },
     { path: '/map/world', icon: 'bi-globe',      label: t('nav.mapWorld') },

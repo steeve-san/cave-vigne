@@ -344,26 +344,81 @@ Laisse un champ null si tu n'es pas certain. Ne retourne QUE le JSON.`;
   }
 });
 
-// ─── GET /api/wines/barcode/:ean — lookup by EAN barcode via Open Food Facts ──
+// ─── GET /api/wines/barcode/:ean ──────────────────────────────────────────────
+// Lookup chain: 1) local barcode_cache  2) Open Food Facts API  3) web scrapers
+const { scrapeWineByEan, scrapeWineByName } = require('../services/wineScraper');
+
 router.get('/barcode/:ean', auth, async (req, res) => {
   const { ean } = req.params;
   if (!/^\d{8,14}$/.test(ean)) return res.status(400).json({ error: 'Code-barres invalide (8-14 chiffres)' });
+
   try {
-    const url = `https://world.openfoodfacts.org/api/v0/product/${ean}.json`;
-    const resp = await fetch(url, { signal: AbortSignal.timeout(6000) });
-    const data = await resp.json();
-    if (data.status !== 1) return res.status(404).json({ error: 'Produit introuvable dans Open Food Facts' });
-    const p = data.product;
-    res.json({
-      name:     p.product_name_fr || p.product_name || '',
-      producer: p.brands || '',
-      country:  (p.countries_tags?.[0] || '').replace(/^en:/, ''),
-      region:   p.origins || '',
-      grapes:   p.ingredients_text_fr || p.ingredients_text || '',
-      notes:    p.generic_name_fr || p.generic_name || '',
-    });
+    // ── 1. Local cache ─────────────────────────────────────────────────────────
+    const [cached] = await db.query('SELECT * FROM barcode_cache WHERE ean=?', [ean]);
+    if (cached.length) {
+      const c = cached[0];
+      return res.json({
+        name: c.name, producer: c.producer, vintage: c.vintage, type: c.type,
+        region: c.region, country: c.country, grapes: c.grapes, notes: c.notes,
+        label_url: c.label_url, source: c.source,
+      });
+    }
+
+    // ── 2. Open Food Facts API ─────────────────────────────────────────────────
+    let result = null;
+    try {
+      const offUrl = `https://world.openfoodfacts.org/api/v0/product/${ean}.json`;
+      const resp = await fetch(offUrl, { signal: AbortSignal.timeout(6000) });
+      const data = await resp.json();
+      if (data.status === 1) {
+        const p = data.product;
+        const name    = p.product_name_fr || p.product_name || '';
+        const producer = p.brands || '';
+        const vintageM = name.match(/\b(19[5-9]\d|20[0-2]\d)\b/);
+        const cats = (p.categories_tags || []).join(' ').toLowerCase();
+        let type = 'rouge';
+        if (cats.includes('blanc') || cats.includes('white')) type = 'blanc';
+        else if (cats.includes('rosé') || cats.includes('rose')) type = 'rosé';
+        else if (cats.includes('pétillant') || cats.includes('sparkling') || cats.includes('champagne')) type = 'pétillant';
+
+        result = {
+          name, producer,
+          vintage:   vintageM ? parseInt(vintageM[1]) : null,
+          type,
+          region:    p.origins || null,
+          country:   (p.countries_tags?.[0] || 'France').replace(/^[a-z]{2}:/, '') || 'France',
+          grapes:    p.ingredients_text_fr || p.ingredients_text || null,
+          notes:     p.generic_name_fr || p.generic_name || null,
+          label_url: p.image_front_url || p.image_url || null,
+          source:    'off',
+        };
+      }
+    } catch { /* OFF unavailable, continue to scrapers */ }
+
+    // ── 3. Web scrapers (Vivino → Oeni → Liv-ex) ──────────────────────────────
+    if (!result?.name) {
+      const scraped = await scrapeWineByEan(ean);
+      if (scraped) result = scraped;
+    }
+
+    if (!result) return res.status(404).json({ error: 'Produit introuvable' });
+
+    // ── 4. Persist to local cache ─────────────────────────────────────────────
+    try {
+      await db.query(
+        `INSERT INTO barcode_cache (ean,name,producer,vintage,type,region,country,grapes,notes,label_url,source)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), producer=VALUES(producer), updated_at=NOW()`,
+        [ean, result.name||null, result.producer||null, result.vintage||null,
+         result.type||'rouge', result.region||null, result.country||'France',
+         result.grapes||null, result.notes||null, result.label_url||null, result.source||'off']
+      );
+    } catch { /* non-blocking */ }
+
+    res.json(result);
   } catch (err) {
-    res.status(503).json({ error: 'Service Open Food Facts indisponible' });
+    console.error('[barcode]', err.message);
+    res.status(503).json({ error: 'Service indisponible' });
   }
 });
 

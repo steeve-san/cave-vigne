@@ -12,7 +12,7 @@ const en = {
     mapWorld: 'World map', mapSpirits: 'Origins', admin: 'Administration',
     discovery: 'Discovery', collection: 'Wines', privateCollection: 'Private collection',
     profile: 'Profile', spiritsSection: 'Spirits', readOnly: 'Read only',
-    wishlist: 'Wishlist', sharing: 'Shared cellars',
+    wishlist: 'Wishlist', sharing: 'Shared cellars', cellar: '3D cellar view',
   },
   auth: {
     login: 'Login', register: 'Register', logout: 'Logout', goodbye: 'Goodbye!',

@@ -12,7 +12,7 @@ const fr = {
     mapWorld: 'Carte monde', mapSpirits: 'Origines', admin: 'Administration',
     discovery: 'Découverte', collection: 'Vins', privateCollection: 'Collection privée',
     profile: 'Profil', spiritsSection: 'Spiritueux', readOnly: 'Lecture seule',
-    wishlist: 'Liste de souhaits', sharing: 'Caves partagées',
+    wishlist: 'Liste de souhaits', sharing: 'Caves partagées', cellar: 'Vue 3D cave',
   },
   auth: {
     login: 'Connexion', register: 'Inscription', logout: 'Déconnexion', goodbye: 'Au revoir !',

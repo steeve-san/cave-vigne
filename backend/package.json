@@ -11,7 +11,9 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "migrate": "node src/config/migrate.js",
-    "seed": "node src/config/seed.js"
+    "seed": "node src/config/seed.js",
+    "import:off": "node src/jobs/importOpenFoodFacts.js",
+    "import:off:refresh": "node src/jobs/importOpenFoodFacts.js --refresh"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -30,6 +32,7 @@
     "redis": "^4.7.0",
     "sharp": "^0.34.0",
     "speakeasy": "^2.0.0",
+    "cheerio": "^1.0.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {
