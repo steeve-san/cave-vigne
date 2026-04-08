@@ -1,5 +1,6 @@
-// src/services/wineScraper.js — fallback wine data scrapers
-// Sources (in priority order): UPC ItemDB → Vivino → Oeni → Liv-ex
+// src/services/wineScraper.js — fallback wine + beer data scrapers
+// Wine sources: UPC ItemDB → Vivino → Oeni → Liv-ex
+// Beer sources: UPC ItemDB → V&B → Untappd → RateBeer
 // All functions return null on failure (never throw).
 
 const axios = require('axios');
@@ -184,4 +185,195 @@ async function scrapeWineByName(name, hint) {
   return null;
 }
 
-module.exports = { scrapeWineByEan, scrapeWineByName, vivinoSearch };
+// ═══════════════════════════════════════════════════════════════════════════════
+// BEER SCRAPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Map beer type keywords → enum value ──────────────────────────────────────
+function mapBeerType(text) {
+  if (!text) return 'blonde';
+  const t = text.toLowerCase();
+  if (t.includes('ipa') && (t.includes('new') || t.includes('hazy') || t.includes('ne'))) return 'NEIPA';
+  if (t.includes('ipa') || t.includes('india pale')) return 'IPA';
+  if (t.includes('stout')) return 'stout';
+  if (t.includes('porter')) return 'porter';
+  if (t.includes('lager')) return 'lager';
+  if (t.includes('pilsner') || t.includes('pils')) return 'pilsner';
+  if (t.includes('triple') || t.includes('tripel')) return 'triple';
+  if (t.includes('quadruple') || t.includes('quad')) return 'quadruple';
+  if (t.includes('sour') || t.includes('gose') || t.includes('gueuze') || t.includes('kriek')) return 'sour';
+  if (t.includes('lambic')) return 'lambic';
+  if (t.includes('saison') || t.includes('farmhouse')) return 'saison';
+  if (t.includes('blanche') || t.includes('weiss') || t.includes('wit') || t.includes('wheat')) return 'blanche';
+  if (t.includes('ambrée') || t.includes('ambree') || t.includes('amber') || t.includes('red ale') || t.includes('rouge')) return 'ambrée';
+  if (t.includes('brune') || t.includes('brown') || t.includes('dark') || t.includes('dunkel')) return 'brune';
+  if (t.includes('blonde') || t.includes('pale ale') || t.includes('golden')) return 'blonde';
+  return 'blonde';
+}
+
+// ── 5. V&B (Vins & Bières) — French specialist beer retailer ─────────────────
+async function vAndBSearch(query) {
+  try {
+    // V&B search endpoint
+    const { data } = await axios.get('https://www.vandb.fr/search', {
+      params: { q: query },
+      headers: { ...HEADERS, Accept: 'text/html' },
+      timeout: TIMEOUT,
+    });
+    const $ = cheerio.load(data);
+
+    // Try JSON-LD first (Product schema)
+    let result = null;
+    $('script[type="application/ld+json"]').each((_i, el) => {
+      if (result) return;
+      try {
+        const parsed = JSON.parse($(el).text());
+        const items = parsed?.itemListElement || (Array.isArray(parsed) ? parsed : [parsed]);
+        const first = items?.[0]?.item || items?.[0];
+        if (first?.['@type'] === 'Product' && first?.name) {
+          result = {
+            name:     first.name,
+            brewery:  first.brand?.name || null,
+            notes:    first.description || null,
+            label_url: first.image || null,
+            source:   'vandb',
+          };
+        }
+      } catch { /* skip */ }
+    });
+    if (result) return result;
+
+    // Fallback: parse product grid
+    const card = $('.product-item, [class*="product_item"], [class*="product-card"], article.product').first();
+    if (!card.length) return null;
+
+    const name    = card.find('[class*="product-name"], [class*="product_name"], h2, h3').first().text().trim();
+    const brewery = card.find('[class*="brand"], [class*="producer"], [class*="brewery"]').first().text().trim();
+    const abvText = card.find('[class*="abv"], [class*="degre"], [class*="alcohol"]').first().text().trim();
+    const abv     = abvText ? parseFloat(abvText.replace(',', '.')) : null;
+    const imgSrc  = card.find('img').first().attr('src') || null;
+
+    if (!name) return null;
+    return {
+      name,
+      brewery:   brewery || null,
+      abv:       abv || null,
+      label_url: imgSrc ? (imgSrc.startsWith('http') ? imgSrc : `https://www.vandb.fr${imgSrc}`) : null,
+      source:    'vandb',
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── 6. Untappd — world's largest beer database (public search) ───────────────
+async function untappdSearch(query) {
+  try {
+    // Untappd has a public search endpoint used by their own web app
+    const { data } = await axios.get('https://untappd.com/search', {
+      params: { q: query, type: 'beer' },
+      headers: {
+        ...HEADERS,
+        Accept: 'text/html',
+        Referer: 'https://untappd.com/',
+      },
+      timeout: TIMEOUT,
+    });
+    const $ = cheerio.load(data);
+
+    // Each result: .beer-item
+    const first = $('.beer-item, [class*="beer_item"]').first();
+    if (!first.length) return null;
+
+    const name    = first.find('.beer-name, [class*="beer_name"], h1, h2').first().text().trim();
+    const brewery = first.find('.brewery, [class*="brewery"], .brewer').first().text().trim();
+    const style   = first.find('.style, [class*="style"], [class*="type"]').first().text().trim();
+    const abvText = first.find('[class*="abv"]').first().text().trim();
+    const abv     = abvText ? parseFloat(abvText.replace(',', '.').replace(/[^\d.]/g, '')) : null;
+    const imgSrc  = first.find('img.label, img.beer-label, img[class*="label"]').first().attr('src') || null;
+
+    if (!name) return null;
+    return {
+      name,
+      brewery:   brewery || null,
+      type:      mapBeerType(style),
+      abv:       (!isNaN(abv) && abv > 0) ? abv : null,
+      notes:     style || null,
+      label_url: imgSrc || null,
+      source:    'untappd',
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── 7. RateBeer — fallback beer reference ────────────────────────────────────
+async function rateBeerSearch(query) {
+  try {
+    const { data } = await axios.get('https://www.ratebeer.com/search/', {
+      params: { beername: query },
+      headers: { ...HEADERS, Accept: 'text/html' },
+      timeout: TIMEOUT,
+    });
+    const $ = cheerio.load(data);
+
+    // Try JSON-LD
+    const jsonLd = $('script[type="application/ld+json"]').first().text();
+    if (jsonLd) {
+      try {
+        const parsed = JSON.parse(jsonLd);
+        const item = Array.isArray(parsed) ? parsed[0] : parsed;
+        if (item?.name) {
+          return {
+            name:     item.name,
+            brewery:  item.brand?.name || null,
+            notes:    item.description || null,
+            label_url: item.image || null,
+            source:   'ratebeer',
+          };
+        }
+      } catch { /* skip */ }
+    }
+
+    const first = $('[class*="beer"], .search-result, [data-type="beer"]').first();
+    if (!first.length) return null;
+    const name = first.find('a, h3, h2').first().text().trim();
+    if (!name) return null;
+    return { name, source: 'ratebeer' };
+  } catch {
+    return null;
+  }
+}
+
+// ── Public API — Beer ──────────────────────────────────────────────────────────
+
+/**
+ * EAN → beer data.
+ * Flow: UPC ItemDB (name) → V&B → Untappd → RateBeer
+ */
+async function scrapeBeerByEan(ean) {
+  const upc = await upcItemDbLookup(ean);
+  if (!upc?.name) return null;
+  return scrapeBeerByName(upc.name, upc.producer);
+}
+
+/**
+ * Beer name → enriched beer data.
+ * Tries V&B first (French context), then Untappd, then RateBeer.
+ */
+async function scrapeBeerByName(name, hint) {
+  const query = [name, hint].filter(Boolean).join(' ').trim();
+
+  const vandb = await vAndBSearch(query);
+  if (vandb?.name) return vandb;
+
+  const untappd = await untappdSearch(query);
+  if (untappd?.name) return untappd;
+
+  const ratebeer = await rateBeerSearch(query);
+  if (ratebeer?.name) return { ...ratebeer, name: ratebeer.name || name };
+
+  return null;
+}
+
+module.exports = { scrapeWineByEan, scrapeWineByName, vivinoSearch, scrapeBeerByEan, scrapeBeerByName, mapBeerType };

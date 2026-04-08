@@ -50,7 +50,8 @@ export default function Layout() {
     { path: '/map/world', icon: 'bi-globe',      label: t('nav.mapWorld') },
     { path: '/wishlist',  icon: 'bi-heart',       label: t('nav.wishlist'),  hide: isReadOnly },
     { path: '/sharing',   icon: 'bi-people',      label: t('nav.sharing'),   hide: isReadOnly },
-    { path: '/spirits',   icon: 'bi-cup-hot',    label: t('nav.spirits'),   badge: spiritCount || null, section: t('nav.spiritsSection') },
+    { path: '/beers',     icon: 'bi-cup-straw',   label: t('nav.beers'),     section: t('nav.spiritsSection') },
+    { path: '/spirits',   icon: 'bi-cup-hot',    label: t('nav.spirits'),   badge: spiritCount || null },
     { path: '/map/spirits',icon:'bi-map',        label: t('nav.mapSpirits') },
     ...(isAdmin ? [{ path: '/admin', icon: 'bi-shield-check', label: t('nav.admin'), section: '' }] : []),
   ].filter(item => !item.hide);

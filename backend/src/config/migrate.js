@@ -218,10 +218,36 @@ async function migrate() {
       grapes TEXT,
       notes TEXT,
       label_url VARCHAR(500),
-      source ENUM('off','vivino','oeni','livex','manual') DEFAULT 'off',
+      source ENUM('off','vivino','oeni','livex','vandb','untappd','ratebeer','manual') DEFAULT 'off',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       UNIQUE KEY idx_ean (ean)
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS beers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      brewery VARCHAR(255),
+      type ENUM('blonde','brune','blanche','ambrée','IPA','NEIPA','stout','porter',
+                'lager','pilsner','triple','quadruple','sour','saison','lambic','autre') NOT NULL DEFAULT 'blonde',
+      country VARCHAR(100) DEFAULT 'France',
+      region VARCHAR(255),
+      abv DECIMAL(4,1),
+      ibu SMALLINT,
+      volume SMALLINT DEFAULT 33,
+      quantity INT NOT NULL DEFAULT 1,
+      price DECIMAL(10,2),
+      rating TINYINT CHECK (rating BETWEEN 0 AND 100),
+      status ENUM('stock','open','empty') DEFAULT 'stock',
+      notes TEXT,
+      label_image VARCHAR(500),
+      ean VARCHAR(20),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_user (user_id),
+      INDEX idx_type (type)
     ) ENGINE=InnoDB;
   `;
 

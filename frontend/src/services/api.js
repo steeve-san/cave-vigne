@@ -71,6 +71,16 @@ export const winesAPI = {
   importCsv:    (file)       => { const fd = new FormData(); fd.append('file', file); return api.post('/wines/import', fd); },
 };
 
+// ─── Beers ────────────────────────────────────────────────────────────────────
+export const beersAPI = {
+  list:    (params)   => api.get('/beers', { params }),
+  stats:   ()         => api.get('/beers/stats'),
+  create:  (data)     => api.post('/beers', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  update:  (id, data) => api.put(`/beers/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  remove:  (id)       => api.delete(`/beers/${id}`),
+  barcode: (ean)      => api.get(`/beers/barcode/${ean}`),
+};
+
 // ─── Spirits ──────────────────────────────────────────────────────────────────
 export const spiritsAPI = {
   list:    (params)    => api.get('/spirits', { params }),

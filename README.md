@@ -22,6 +22,7 @@
 | 🔐 **Authentification** | Inscription/connexion sécurisée, JWT access + refresh token, réinitialisation mot de passe |
 | 🛡️ **2FA TOTP** | Double authentification (Google Authenticator, FreeOTP) |
 | 🍷 **Cave à vins** | CRUD complet, quantités, position, prix, millésime, infos domaine, sélection multiple |
+| 🍺 **Bières** | Collection complète : blonde, brune, IPA, NEIPA, stout, sour, lambic… — ABV, IBU, volume, brasserie, statut — scanner code-barres V&B / Untappd / RateBeer |
 | 🥃 **Spiritueux** | Whisky, rhum, cognac, armagnac, calvados, gin, vodka — avec statut ouvert/fermé |
 | 📸 **Photos bouteilles** | Photo étiquette + photo bouteille, infos domaine (site web, sol, altitude) |
 | 🤖 **Sommelier IA multi-provider** | Accords mets/vins depuis la cave — Claude, ChatGPT, Mistral ou OpenWebUI/Ollama |
@@ -342,7 +343,8 @@ Ce projet est sous licence **MIT** — voir [LICENSE](./LICENSE) pour les détai
 - **Bootstrap 5** — Interface utilisateur
 - **Chart.js** — Graphiques et statistiques
 - **Open Food Facts** — Enrichissement et cache barcode local
-- **Vivino / Oeni / Liv-ex** — Scrapers fallback lookup EAN
+- **Vivino / Oeni / Liv-ex** — Scrapers fallback vins
+- **V&B / Untappd / RateBeer** — Scrapers fallback bières
 - **TheMealDB** — Suggestions de recettes associées
 
 ---
