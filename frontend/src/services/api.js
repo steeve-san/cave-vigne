@@ -64,6 +64,7 @@ export const winesAPI = {
   addAccord: (id, data) => api.post(`/wines/${id}/accords`, data),
   stats:     ()       => api.get('/wines/stats'),
   enrich:    (id)     => api.get(`/wines/${id}/enrich`),
+  aiEnrich:  (id)     => api.post(`/wines/${id}/ai-enrich`),
   exportCsv: ()       => api.get('/wines/export', { responseType: 'blob' }),
   importCsv: (file)   => { const fd = new FormData(); fd.append('file', file); return api.post('/wines/import', fd); },
 };

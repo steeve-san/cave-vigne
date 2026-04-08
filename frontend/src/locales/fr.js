@@ -39,6 +39,9 @@ const fr = {
     // Enrichissement
     enrichBtn: 'Enrichir depuis le web', enrichSource: 'Open Food Facts · données libres',
     enrichResults: 'Résultats — cliquez pour appliquer :',
+    aiEnrichBtn: '✨ Enrichir avec IA', aiEnrichLoading: 'Analyse IA…',
+    aiEnrichTitle: 'Suggestions IA — cochez les champs à appliquer',
+    aiEnrichApply: 'Appliquer la sélection', aiEnrichPairings: 'Accords suggérés',
     // Domaine
     domainWebsite: 'Site web du domaine', soilType: 'Type de sol', altitude: 'Altitude (m)',
     domainDescription: 'Description du domaine',

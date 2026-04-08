@@ -125,7 +125,16 @@ DB_PASSWORD=votre_mot_de_passe
 
 JWT_SECRET=cle_secrete_64_caracteres_minimum
 
-ANTHROPIC_API_KEY=sk-ant-...
+# Clé IA par défaut (remplacée par la config admin si renseignée en BDD)
+ANTHROPIC_API_KEY=sk-ant-...     # Claude
+# OPENAI_API_KEY=sk-...          # ChatGPT
+# MISTRAL_API_KEY=...            # Mistral
+
+# SMTP pour emails (reset mot de passe, notifications)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=...
+SMTP_PASS=...
 
 # Optionnel
 REDIS_HOST=localhost
@@ -138,29 +147,37 @@ REDIS_PASSWORD=
 
 ```
 cave-vigne/
-├── backend/                    # API Express
+├── backend/
 │   ├── src/
 │   │   ├── config/
+│   │   │   ├── ai.js           # Abstraction multi-provider IA (callAI, callAIVision)
 │   │   │   ├── db.js           # Pool MariaDB
 │   │   │   ├── redis.js        # Cache Redis
 │   │   │   ├── email.js        # Transport Nodemailer dynamique
 │   │   │   └── migrate.js      # Migration BDD (tables + ALTER)
+│   │   ├── jobs/
+│   │   │   └── notifications.js # Cron quotidien keep_until + purge tokens
 │   │   ├── middleware/
 │   │   │   └── auth.js         # Vérification JWT + optionalAuth
 │   │   ├── routes/
-│   │   │   ├── auth.js         # Login, register, refresh, 2FA TOTP
-│   │   │   ├── wines.js        # CRUD vins + accords + enrichissement
+│   │   │   ├── auth.js         # Login, register, refresh, 2FA TOTP, reset password
+│   │   │   ├── wines.js        # CRUD vins + accords + enrichissement + ai-enrich
 │   │   │   ├── spirits.js      # CRUD spiritueux
 │   │   │   ├── sommelier.js    # IA accord + scan + recettes TheMealDB
-│   │   │   └── settings.js     # Config admin (API key, SMTP, catalogue)
+│   │   │   ├── tasting.js      # Journal de dégustation par bouteille
+│   │   │   ├── wishlist.js     # Liste de souhaits
+│   │   │   └── settings.js     # Config admin (IA, SMTP, catalogue)
 │   │   └── server.js           # Point d'entrée Express
 │   ├── ecosystem.config.js     # Config PM2
 │   ├── .env.example
 │   └── package.json
 │
-├── frontend/                   # React 19 SPA
-│   ├── index.html              # Entrée Vite (racine projet)
-│   ├── vite.config.js          # Config Vite (proxy, envPrefix, outDir)
+├── frontend/
+│   ├── index.html              # Entrée Vite
+│   ├── vite.config.js
+│   ├── public/
+│   │   ├── manifest.json       # PWA manifest
+│   │   └── sw.js               # Service Worker (cache-first)
 │   ├── src/
 │   │   ├── components/
 │   │   │   └── Layout.jsx      # Sidebar + Topbar responsive
@@ -170,23 +187,26 @@ cave-vigne/
 │   │   │   ├── fr.js           # Traductions françaises
 │   │   │   └── en.js           # Traductions anglaises
 │   │   ├── pages/
-│   │   │   ├── Login.jsx
+│   │   │   ├── Login.jsx       # + lien "Mot de passe oublié"
 │   │   │   ├── Register.jsx
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── WinesPage.jsx   # Cave vins (tabs: vin / domaine / photos)
-│   │   │   ├── SpiritsPage.jsx # Spiritueux (tabs: spirit / distillerie / photos)
-│   │   │   ├── SommelierPage.jsx # Sommelier IA + recettes
-│   │   │   ├── ScanPage.jsx    # Scanner étiquette
-│   │   │   ├── ProfilePage.jsx # Profil utilisateur + 2FA
-│   │   │   ├── AdminPage.jsx   # Admin : utilisateurs + paramètres
+│   │   │   ├── ForgotPassword.jsx
+│   │   │   ├── ResetPassword.jsx
+│   │   │   ├── Dashboard.jsx   # Donut Chart.js + analyse IA cave
+│   │   │   ├── WinesPage.jsx   # CRUD + dégustation + enrichissement IA/web + bulk ops
+│   │   │   ├── SpiritsPage.jsx
+│   │   │   ├── WishlistPage.jsx
+│   │   │   ├── SommelierPage.jsx # + badge provider actif
+│   │   │   ├── ScanPage.jsx    # + badge provider actif
+│   │   │   ├── ProfilePage.jsx # Profil + 2FA
+│   │   │   ├── AdminPage.jsx   # Admin : utilisateurs + paramètres IA multi-provider
 │   │   │   ├── WorldMapPage.jsx
 │   │   │   ├── FranceMapPage.jsx
 │   │   │   └── SpiritsMapPage.jsx
 │   │   ├── services/
 │   │   │   └── api.js          # Axios + auto-refresh JWT
-│   │   ├── App.jsx             # Routes React Router
-│   │   ├── index.css           # Thème sombre + Bootstrap overrides
-│   │   └── index.js
+│   │   ├── App.jsx
+│   │   ├── index.css
+│   │   └── main.jsx            # + PWA service worker registration
 │   └── package.json
 │
 ├── android/                    # App Android native
@@ -282,14 +302,9 @@ Les contributions sont les bienvenues ! Pour contribuer :
 
 ### Idées d'améliorations
 
-- [ ] Import/export CSV de la cave
-- [ ] Notifications rappel de garder jusqu'à (keep_until)
 - [ ] Application iOS (Swift WebView)
-- [ ] Mode hors-ligne avec Service Worker / PWA
-- [ ] Partage de cave entre utilisateurs
-- [ ] Statistiques avancées et graphiques Chart.js
-- [ ] Recherche full-text (MariaDB FTS)
-- [ ] Mode dégustation (fiche de dégustation complète)
+- [ ] Partage de cave entre utilisateurs (caves partagées)
+- [ ] Recherche full-text améliorée (MariaDB FTS)
 
 ---
 
@@ -301,9 +316,10 @@ Ce projet est sous licence **MIT** — voir [LICENSE](./LICENSE) pour les détai
 
 ## 🙏 Crédits
 
-- **Claude Sonnet 4.6 (Anthropic)** — Sommelier IA et analyse d'étiquettes par vision
+- **Claude (Anthropic), ChatGPT (OpenAI), Mistral AI, OpenWebUI** — Sommelier IA, analyse d'étiquettes, enrichissement
 - **D3.js** — Cartes interactives
 - **Bootstrap 5** — Interface utilisateur
+- **Chart.js** — Graphiques et statistiques
 - **Open Food Facts** — Enrichissement des données vin
 - **TheMealDB** — Suggestions de recettes associées
 

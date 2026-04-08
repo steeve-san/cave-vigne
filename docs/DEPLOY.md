@@ -244,11 +244,13 @@ sudo ufw enable
 
 Après le premier déploiement, connectez-vous avec un compte `admin` et accédez à **Admin → Paramètres** pour :
 
-- Renseigner la **clé API Anthropic** (Sommelier IA + Scan)
-- Configurer le **serveur SMTP** pour les emails (création de compte, 2FA)
-- Activer/désactiver le **catalogue public** (accès sans authentification)
+- **Fournisseur IA** — choisir entre Claude (Anthropic), ChatGPT (OpenAI), Mistral AI ou OpenWebUI/Ollama ; renseigner la clé API et le modèle
+- **Serveur SMTP** — pour les emails (réinitialisation mot de passe, notifications keep_until)
+- **Catalogue public** — activer/désactiver l'accès visiteur sans authentification
 
-Ces paramètres sont stockés en base et pris en compte immédiatement sans redémarrage.
+Ces paramètres sont stockés en base et pris en compte **immédiatement sans redémarrage**.
+
+> **Vision IA** : le scan d'étiquettes nécessite un modèle supportant les images. Anthropic (claude-sonnet-4-6) et OpenAI (gpt-4o) sont recommandés. Mistral et OpenWebUI utilisent un fallback texte.
 
 ---
 
@@ -295,7 +297,11 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/ZONE_ID/purge_cache" \
 | `DB_PASSWORD` | Mot de passe MariaDB fort (min 20 chars) |
 | `JWT_SECRET` | Clé JWT 64+ caractères aléatoires |
 | `REDIS_PASSWORD` | Mot de passe Redis |
-| `ANTHROPIC_API_KEY` | Clé API Anthropic (Sommelier + Scan) — configurable aussi depuis l'UI admin |
+| `ANTHROPIC_API_KEY` | Clé API Anthropic — priorité sur la config admin en BDD |
+| `OPENAI_API_KEY` | Clé API OpenAI (alternative) |
+| `MISTRAL_API_KEY` | Clé API Mistral (alternative) |
+| `SMTP_HOST` / `SMTP_PORT` | Serveur SMTP pour emails (reset mot de passe, notifications) |
+| `SMTP_USER` / `SMTP_PASS` | Identifiants SMTP |
 | `CF_ZONE_ID` | Zone ID Cloudflare (dashboard → Overview) |
 | `CF_API_TOKEN` | Token API Cloudflare (Zone:Cache Purge) |
 

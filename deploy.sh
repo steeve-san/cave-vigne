@@ -70,11 +70,9 @@ if [[ "$UPDATE_MODE" == "true" ]]; then
   # ── Mise à jour frontend ──
   section "2/3 — Build frontend"
   cd "${SCRIPT_DIR}/frontend"
-  # Supprimer .env.local (priorité CRA > .env.production) pour éviter localhost dans le build
   rm -f .env.local
-  # URL relative : pas de mixed-content, marche en HTTP et HTTPS
   echo "REACT_APP_API_URL=/api" > .env.production
-  npm install --quiet
+  npm install --unsafe-perm --quiet
   npm run build
   cp -r build/. "${APP_DIR}/frontend/build/"
   success "Frontend buildé et copié"
@@ -158,17 +156,17 @@ apt-get install -y -qq \
   ufw git unzip libvips-dev
 success "Système à jour"
 
-# ─── 2. Node.js 20 LTS + npm 11.12.1 ─────────────────────────────────────────
-section "2/9 — Node.js 20 LTS + npm 11.12.1"
-if ! command -v node &>/dev/null || [[ "$(node -v | cut -d. -f1 | tr -d 'v')" -lt 20 ]]; then
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+# ─── 2. Node.js 24 LTS + npm ──────────────────────────────────────────────────
+section "2/9 — Node.js 24 LTS"
+if ! command -v node &>/dev/null || [[ "$(node -v | cut -d. -f1 | tr -d 'v')" -lt 24 ]]; then
+  curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
   apt-get install -y nodejs
   success "Node.js $(node -v) installé"
 else
   success "Node.js $(node -v) déjà présent"
 fi
 
-npm install -g npm@11.12.1 --quiet
+npm install -g npm@latest --quiet
 npm install -g pm2 --quiet
 success "npm $(npm -v) + PM2 $(pm2 -v) installés"
 
@@ -443,7 +441,8 @@ rm -f .env.local
 cat > .env.production <<FENV
 REACT_APP_API_URL=/api
 FENV
-npm install --quiet
+# --unsafe-perm ensures node_modules/.bin symlinks are executable when running as root
+npm install --unsafe-perm --quiet
 npm run build
 cp -r build/. "${APP_DIR}/frontend/build/"
 success "Frontend buildé et copié"

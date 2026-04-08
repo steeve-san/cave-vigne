@@ -290,8 +290,62 @@ router.get('/stats', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
+// ─── POST /api/wines/:id/ai-enrich — enrichissement IA ───────────────────────
+router.post('/:id/ai-enrich', auth, requireRole('user', 'admin'), async (req, res) => {
+  const { callAI, checkAIAvailable } = require('../config/ai');
+  try {
+    const { ok, error: aiErr } = await checkAIAvailable();
+    if (!ok) return res.status(503).json({ error: `IA indisponible : ${aiErr}` });
+
+    const [wines] = await db.query(
+      'SELECT * FROM wines WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.id]
+    );
+    if (!wines.length) return res.status(404).json({ error: 'Vin introuvable' });
+    const w = wines[0];
+
+    const known = [
+      w.name       && `Nom : ${w.name}`,
+      w.producer   && `Producteur : ${w.producer}`,
+      w.vintage    && `Millésime : ${w.vintage}`,
+      w.appellation&& `Appellation : ${w.appellation}`,
+      w.region     && `Région : ${w.region}`,
+      w.country    && `Pays : ${w.country}`,
+      w.type       && `Type : ${w.type}`,
+      w.grapes     && `Cépages : ${w.grapes}`,
+    ].filter(Boolean).join('\n');
+
+    const prompt = `Tu es un expert sommelier. Voici un vin :
+${known}
+
+Complète les informations manquantes grâce à ta connaissance de ce vin.
+Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après :
+{
+  "region": "région viticole",
+  "country": "pays",
+  "appellation": "appellation AOC/AOP exacte",
+  "grapes": "cépages principaux séparés par des virgules",
+  "domain_description": "description du domaine en 2-3 phrases",
+  "soil_type": "type de sol du vignoble",
+  "keep_until": <année entière, ex: 2032>,
+  "notes": "description organoleptique : robe, nez, bouche, finale (3-4 phrases)",
+  "food_pairings": ["accord 1", "accord 2", "accord 3"]
+}
+Laisse un champ null si tu n'es pas certain. Ne retourne QUE le JSON.`;
+
+    const text = await callAI([{ role: 'user', content: prompt }], 800);
+    const match = text.match(/\{[\s\S]+\}/);
+    if (!match) return res.status(500).json({ error: 'Réponse IA invalide' });
+    const enriched = JSON.parse(match[0]);
+    res.json({ enriched });
+  } catch (err) {
+    console.error('[ai-enrich]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── GET /api/wines/:id/enrich — enrichissement depuis sources externes ────────
-// Open Food Facts (free, no key required) + Wine-Searcher if configured
+// Open Food Facts (free, no key required)
 router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) => {
   try {
     const [wines] = await db.query('SELECT * FROM wines WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);

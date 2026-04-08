@@ -56,6 +56,9 @@ function WineModal({ wine, onClose, onSave }) {
   const [loading, setLoading] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [enrichResults, setEnrichResults] = useState(null);
+  const [aiEnriching, setAiEnriching] = useState(false);
+  const [aiEnrichData, setAiEnrichData] = useState(null);
+  const [aiEnrichSelected, setAiEnrichSelected] = useState({});
   const [newTasting, setNewTasting] = useState({ tasted_at: new Date().toISOString().slice(0,10), rating: '', color_desc: '', nose: '', palate: '', finish: '', overall: '' });
   const [savingTasting, setSavingTasting] = useState(false);
   const qcInner = useQueryClient();
@@ -86,6 +89,37 @@ function WineModal({ wine, onClose, onSave }) {
     }));
     setEnrichResults(null);
     toast.success('Données appliquées');
+  };
+
+  const AI_ENRICH_FIELDS = [
+    ['region', 'Région'], ['country', 'Pays'], ['appellation', 'Appellation'],
+    ['grapes', 'Cépages'], ['domain_description', 'Description domaine'],
+    ['soil_type', 'Type de sol'], ['keep_until', 'Garder jusqu\'à'], ['notes', 'Notes'],
+  ];
+
+  const handleAiEnrich = async () => {
+    if (!wine?.id) return;
+    setAiEnriching(true);
+    setAiEnrichData(null);
+    try {
+      const r = await winesAPI.aiEnrich(wine.id);
+      const d = r.data.enriched;
+      // Pre-select only fields that are currently empty in the form
+      const sel = {};
+      AI_ENRICH_FIELDS.forEach(([k]) => { if (d[k] != null && !form[k]) sel[k] = true; });
+      setAiEnrichData(d);
+      setAiEnrichSelected(sel);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Erreur enrichissement IA');
+    } finally { setAiEnriching(false); }
+  };
+
+  const applyAiEnrich = () => {
+    const updates = {};
+    AI_ENRICH_FIELDS.forEach(([k]) => { if (aiEnrichSelected[k] && aiEnrichData[k] != null) updates[k] = String(aiEnrichData[k]); });
+    setForm(f => ({ ...f, ...updates }));
+    setAiEnrichData(null);
+    toast.success(t('wines.aiEnrichApply'));
   };
 
   const handleSubmit = async (e) => {
@@ -139,7 +173,46 @@ function WineModal({ wine, onClose, onSave }) {
                         {enriching ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-search me-1"></i>}
                         {t('wines.enrichBtn')}
                       </button>
+                      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={handleAiEnrich} disabled={aiEnriching}>
+                        {aiEnriching ? <span className="spinner-border spinner-border-sm me-1" /> : null}
+                        {aiEnriching ? t('wines.aiEnrichLoading') : t('wines.aiEnrichBtn')}
+                      </button>
                       <span style={{ fontSize: '0.72rem', color: 'var(--cv-text3)' }}>{t('wines.enrichSource')}</span>
+                    </div>
+                  )}
+                  {/* AI Enrich results panel */}
+                  {aiEnrichData && (
+                    <div className="col-12">
+                      <div className="card p-3" style={{ background: 'var(--cv-bg3)', border: '1px solid var(--cv-gold)' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--cv-gold)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
+                          {t('wines.aiEnrichTitle')}
+                        </div>
+                        {AI_ENRICH_FIELDS.filter(([k]) => aiEnrichData[k] != null).map(([k, label]) => (
+                          <label key={k} className="d-flex align-items-start gap-2 mb-2" style={{ cursor: 'pointer' }}>
+                            <input type="checkbox" checked={!!aiEnrichSelected[k]}
+                              onChange={e => setAiEnrichSelected(s => ({ ...s, [k]: e.target.checked }))}
+                              style={{ marginTop: 3, flexShrink: 0 }} />
+                            <div>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--cv-text2)', fontWeight: 600 }}>{label}</span>
+                              <div style={{ fontSize: '0.82rem', color: 'var(--cv-text)' }}>{String(aiEnrichData[k])}</div>
+                            </div>
+                          </label>
+                        ))}
+                        {aiEnrichData.food_pairings?.length > 0 && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--cv-text2)', marginTop: 4 }}>
+                            <strong>{t('wines.aiEnrichPairings')} :</strong> {aiEnrichData.food_pairings.join(', ')}
+                          </div>
+                        )}
+                        <div className="d-flex gap-2 mt-3">
+                          <button type="button" className="btn btn-sm btn-outline-gold" onClick={applyAiEnrich}
+                            disabled={!Object.values(aiEnrichSelected).some(Boolean)}>
+                            {t('wines.aiEnrichApply')}
+                          </button>
+                          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setAiEnrichData(null)}>
+                            {t('common.cancel')}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                   {enrichResults?.length > 0 && (

@@ -14,6 +14,7 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 - 🤖 **Multi-fournisseurs IA** — support Claude (Anthropic), ChatGPT (OpenAI), Mistral AI et OpenWebUI/Ollama ; sélectionnable depuis l'interface admin sans redémarrage
 - ⚙️ **Panneau IA admin** — configuration dynamique par provider (clé API, modèle, URL OpenWebUI)
 - 🏷️ **Badge provider actif** — indicateur du fournisseur IA courant dans SommelierPage et ScanPage
+- 🔍 **Enrichissement IA** — `POST /api/wines/:id/ai-enrich` : après ajout manuel d'un vin, l'IA complète les champs vides (région, cépages, sol, keep_until, notes, accords) avec un panneau de sélection par case à cocher
 
 ### Backend
 - Nouveau module `backend/src/config/ai.js` — abstraction multi-provider (`callAI`, `callAIVision`, `checkAIAvailable`)
