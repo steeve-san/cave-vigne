@@ -129,11 +129,17 @@ export const totpAPI = {
 
 // ─── Sharing ──────────────────────────────────────────────────────────────────
 export const sharingAPI = {
-  list:    ()                    => api.get('/sharing'),
-  invite:  (email, permission)   => api.post('/sharing/invite', { email, permission }),
-  accept:  (token)               => api.get(`/sharing/accept/${token}`),
-  revoke:  (id)                  => api.delete(`/sharing/${id}`),
-  getCave: (ownerId)             => api.get(`/sharing/cave/${ownerId}`),
+  list:           ()                       => api.get('/sharing'),
+  invite:         (email, permission)      => api.post('/sharing/invite', { email, permission }),
+  accept:         (token)                  => api.get(`/sharing/accept/${token}`),
+  revoke:         (id)                     => api.delete(`/sharing/${id}`),
+  setPermission:  (id, permission)         => api.put(`/sharing/${id}/permission`, { permission }),
+  getCave:        (ownerId)                => api.get(`/sharing/cave/${ownerId}`),
+  // Write operations (permission='write' required)
+  addWine:        (ownerId, formData)      => api.post(`/sharing/cave/${ownerId}/wines`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  updateWine:     (ownerId, id, formData)  => api.put(`/sharing/cave/${ownerId}/wines/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  removeWine:     (ownerId, id)            => api.delete(`/sharing/cave/${ownerId}/wines/${id}`),
+  toggleDrunk:    (ownerId, id)            => api.put(`/sharing/cave/${ownerId}/wines/${id}/drunk`),
 };
 
 // ─── Health ───────────────────────────────────────────────────────────────────
