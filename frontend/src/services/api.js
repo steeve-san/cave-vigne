@@ -73,10 +73,11 @@ export const winesAPI = {
 
 // ─── Spirits ──────────────────────────────────────────────────────────────────
 export const spiritsAPI = {
-  list:   (params) => api.get('/spirits', { params }),
-  create: (data)   => api.post('/spirits', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  update: (id, data) => api.put(`/spirits/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  remove: (id)     => api.delete(`/spirits/${id}`),
+  list:    (params)    => api.get('/spirits', { params }),
+  create:  (data)      => api.post('/spirits', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  update:  (id, data)  => api.put(`/spirits/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  remove:  (id)        => api.delete(`/spirits/${id}`),
+  barcode: (ean)       => api.get(`/spirits/barcode/${ean}`),
 };
 
 // ─── Sommelier ────────────────────────────────────────────────────────────────

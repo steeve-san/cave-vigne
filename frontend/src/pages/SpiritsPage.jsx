@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { spiritsAPI } from '../services/api';
 import { useLang } from '../context/LangContext';
 import toast from 'react-hot-toast';
+import BarcodeScannerModal from '../components/BarcodeScannerModal';
 
 const SPIRIT_TYPES = ['whisky','rhum','cognac','armagnac','calvados','gin','vodka','autre'];
 const TYPE_ICONS = { whisky:'🥃', rhum:'🍹', cognac:'🥃', armagnac:'🥃', calvados:'🍎', gin:'🍸', vodka:'🍸', autre:'🍶' };
@@ -34,10 +35,14 @@ function PhotoPicker({ label, current, onChange, t }) {
   );
 }
 
-function SpiritModal({ spirit, onClose, onSave }) {
+function SpiritModal({ spirit, prefill, onClose, onSave }) {
   const { t } = useLang();
   const [tab, setTab] = useState('spirit');
-  const [form, setForm] = useState(spirit ? { ...EMPTY, ...spirit } : { ...EMPTY });
+  const [form, setForm] = useState(() => {
+    if (spirit) return { ...EMPTY, ...spirit };
+    if (prefill) return { ...EMPTY, ...prefill };
+    return { ...EMPTY };
+  });
   const [labelFile,  setLabelFile]  = useState(null);
   const [bottleFile, setBottleFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -143,7 +148,19 @@ export default function SpiritsPage() {
   const [search, setSearch] = useState('');
   const [typeF, setTypeF] = useState('all');
   const [statusF, setStatusF] = useState('all');
-  const [modal, setModal] = useState(null);
+  const [modal, setModal] = useState(null); // null | { mode: 'add'|'edit'|'barcode', spirit?, prefill? }
+
+  const handleBarcodeResult = (data) => {
+    // Map barcode result → spirit fields
+    const prefill = {
+      name:     data.name     || '',
+      producer: data.producer || '',
+      origin:   data.origin   || [data.region, data.country].filter(Boolean).join(', ') || '',
+      notes:    data.notes    || '',
+    };
+    setModal({ mode: 'add', prefill });
+    toast.success('Produit trouvé — vérifiez et complétez les informations');
+  };
 
   const params = { search: search || undefined, type: typeF !== 'all' ? typeF : undefined, status: statusF !== 'all' ? statusF : undefined };
   const { data: spirits = [], isLoading } = useQuery({ queryKey: ['spirits', params], queryFn: () => spiritsAPI.list(params).then(r => r.data) });
@@ -193,7 +210,10 @@ export default function SpiritsPage() {
               <option value="empty">Terminé</option>
             </select>
           </div>
-          <div className="col-12 col-md-2 d-flex justify-content-md-end">
+          <div className="col-12 col-md-2 d-flex justify-content-md-end gap-2">
+            <button className="btn btn-outline-gold btn-sm" onClick={() => setModal({ mode: 'barcode' })} title="Scanner code-barres">
+              <i className="bi bi-upc-scan"></i>
+            </button>
             <button className="btn btn-gold btn-sm" onClick={() => setModal({ mode: 'add' })}><i className="bi bi-plus me-1"></i>Ajouter</button>
           </div>
         </div>
@@ -253,8 +273,16 @@ export default function SpiritsPage() {
           </div>
         )}
 
-      {modal?.mode === 'add' && <SpiritModal onClose={() => setModal(null)} onSave={d => addM.mutateAsync(d)} />}
+      {modal?.mode === 'add' && <SpiritModal prefill={modal.prefill} onClose={() => setModal(null)} onSave={d => addM.mutateAsync(d)} />}
       {modal?.mode === 'edit' && <SpiritModal spirit={modal.spirit} onClose={() => setModal(null)} onSave={d => editM.mutateAsync({ id: modal.spirit.id, data: d })} />}
+      {modal?.mode === 'barcode' && (
+        <BarcodeScannerModal
+          title="Scanner un spiritueux"
+          lookupFn={ean => spiritsAPI.barcode(ean)}
+          onClose={() => setModal(null)}
+          onResult={(data) => handleBarcodeResult(data)}
+        />
+      )}
     </div>
   );
 }

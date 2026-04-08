@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { winesAPI, tastingAPI } from '../services/api';
 import { useLang } from '../context/LangContext';
 import toast from 'react-hot-toast';
+import BarcodeScannerModal from '../components/BarcodeScannerModal';
 
 // Print-to-PDF: open a print window with a styled sheet of all visible wines
 function printWinesPDF(wines) {
@@ -417,58 +418,6 @@ function WineModal({ wine, prefill, onClose, onSave }) {
   );
 }
 
-function BarcodeModal({ onClose, onResult }) {
-  const [ean, setEan] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleLookup = async () => {
-    const code = ean.trim();
-    if (!/^\d{8,14}$/.test(code)) { setError('Code EAN invalide (8–14 chiffres)'); return; }
-    setLoading(true); setError('');
-    try {
-      const r = await winesAPI.barcode(code);
-      onResult(r.data);
-      onClose();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Produit introuvable');
-    } finally { setLoading(false); }
-  };
-
-  const handleKeyDown = (e) => { if (e.key === 'Enter') handleLookup(); };
-
-  return (
-    <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: 400 }}>
-        <div className="modal-content">
-          <div className="modal-header">
-            <h5 className="modal-title"><i className="bi bi-upc-scan me-2"></i>Scanner un code-barres</h5>
-            <button className="btn-close" onClick={onClose} />
-          </div>
-          <div className="modal-body">
-            <p style={{ fontSize: '0.82rem', color: 'var(--cv-text2)' }}>
-              Entrez ou scannez le code EAN de la bouteille (8 à 14 chiffres) pour pré-remplir les informations depuis Open Food Facts.
-            </p>
-            <div className="input-group mb-2">
-              <span className="input-group-text"><i className="bi bi-upc"></i></span>
-              <input className="form-control" placeholder="ex: 3760076020079" value={ean}
-                onChange={e => setEan(e.target.value)} onKeyDown={handleKeyDown}
-                type="tel" inputMode="numeric" autoFocus />
-            </div>
-            {error && <div className="alert alert-danger py-2" style={{ fontSize: '0.82rem' }}>{error}</div>}
-          </div>
-          <div className="modal-footer">
-            <button className="btn btn-outline-gold" onClick={onClose}>Annuler</button>
-            <button className="btn btn-gold" onClick={handleLookup} disabled={loading || !ean.trim()}>
-              {loading ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-search me-1"></i>}
-              Rechercher
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function AccordModal({ wine, onClose }) {
   const qc = useQueryClient();
@@ -717,7 +666,14 @@ export default function WinesPage() {
       {modal?.mode === 'add' && <WineModal prefill={modal.prefill} onClose={() => { setModal(null); setPendingBarcode(null); }} onSave={(fd) => addMutation.mutateAsync(fd)} />}
       {modal?.mode === 'edit' && <WineModal wine={modal.wine} onClose={() => setModal(null)} onSave={(fd) => editMutation.mutateAsync({ id: modal.wine.id, fd })} />}
       {modal?.mode === 'accord' && <AccordModal wine={modal.wine} onClose={() => setModal(null)} />}
-      {modal?.mode === 'barcode' && <BarcodeModal onClose={() => setModal(null)} onResult={handleBarcodeResult} />}
+      {modal?.mode === 'barcode' && (
+        <BarcodeScannerModal
+          title="Scanner un vin"
+          lookupFn={ean => winesAPI.barcode(ean)}
+          onClose={() => setModal(null)}
+          onResult={(data) => handleBarcodeResult(data)}
+        />
+      )}
     </div>
   );
 }

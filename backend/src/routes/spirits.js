@@ -129,4 +129,79 @@ router.delete('/:id', auth, requireRole('user', 'admin'), async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
+// ─── GET /api/spirits/barcode/:ean ────────────────────────────────────────────
+// Même chaîne que /api/wines/barcode : cache local → OFF → scrapers
+// Retourne des champs orientés spiritueux (name, producer, origin, notes)
+const { scrapeWineByEan } = require('../services/wineScraper');
+const db = require('../config/db');
+
+router.get('/barcode/:ean', auth, async (req, res) => {
+  const { ean } = req.params;
+  if (!/^\d{8,14}$/.test(ean)) return res.status(400).json({ error: 'Code-barres invalide (8–14 chiffres)' });
+
+  try {
+    // 1. Cache local
+    const [cached] = await db.query('SELECT * FROM barcode_cache WHERE ean=?', [ean]);
+    if (cached.length) {
+      const c = cached[0];
+      return res.json({
+        name: c.name, producer: c.producer,
+        origin: [c.region, c.country].filter(Boolean).join(', ') || null,
+        notes: c.notes, label_url: c.label_url, source: c.source,
+      });
+    }
+
+    // 2. Open Food Facts
+    let result = null;
+    try {
+      const offUrl = `https://world.openfoodfacts.org/api/v0/product/${ean}.json`;
+      const resp = await fetch(offUrl, { signal: AbortSignal.timeout(6000) });
+      const data = await resp.json();
+      if (data.status === 1) {
+        const p = data.product;
+        result = {
+          name:     p.product_name_fr || p.product_name || null,
+          producer: p.brands || null,
+          origin:   [p.origins, (p.countries_tags?.[0] || '').replace(/^[a-z]{2}:/, '')].filter(Boolean).join(', ') || null,
+          notes:    p.generic_name_fr || p.generic_name || null,
+          label_url: p.image_front_url || p.image_url || null,
+          source:   'off',
+        };
+      }
+    } catch { /* continue */ }
+
+    // 3. Scrapers
+    if (!result?.name) {
+      const scraped = await scrapeWineByEan(ean);
+      if (scraped) {
+        result = {
+          name:     scraped.name || null,
+          producer: scraped.producer || null,
+          origin:   [scraped.region, scraped.country].filter(Boolean).join(', ') || null,
+          notes:    scraped.notes || null,
+          label_url: scraped.label_url || null,
+          source:   scraped.source,
+        };
+      }
+    }
+
+    if (!result) return res.status(404).json({ error: 'Produit introuvable' });
+
+    // 4. Persist cache
+    try {
+      await db.query(
+        `INSERT INTO barcode_cache (ean,name,producer,country,notes,label_url,source)
+         VALUES (?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), producer=VALUES(producer), updated_at=NOW()`,
+        [ean, result.name||null, result.producer||null, null, result.notes||null, result.label_url||null, result.source||'off']
+      );
+    } catch { /* non-blocking */ }
+
+    res.json(result);
+  } catch (err) {
+    console.error('[spirits/barcode]', err.message);
+    res.status(503).json({ error: 'Service indisponible' });
+  }
+});
+
 module.exports = router;
