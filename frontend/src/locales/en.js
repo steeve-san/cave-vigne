@@ -11,7 +11,8 @@ const en = {
     sommelier: 'AI Sommelier', scan: 'Scan', mapFrance: 'France map',
     mapWorld: 'World map', mapSpirits: 'Origins', admin: 'Administration',
     discovery: 'Discovery', collection: 'Wines', privateCollection: 'Private collection',
-    profile: 'Profile', spiritsSection: 'Spirits', readOnly: 'Read only', wishlist: 'Wishlist',
+    profile: 'Profile', spiritsSection: 'Spirits', readOnly: 'Read only',
+    wishlist: 'Wishlist', sharing: 'Shared cellars',
   },
   auth: {
     login: 'Login', register: 'Register', logout: 'Logout', goodbye: 'Goodbye!',
@@ -65,6 +66,9 @@ const en = {
     recentWines: 'Recent wines', quickActions: 'Quick actions',
     addWine: 'Add a wine', addSpirit: 'Add a spirit',
     scanLabel: 'Scan a label', askSommelier: 'Ask the sommelier',
+    valueHistory: 'Cellar value trend', agingTracker: 'Wine maturity',
+    pastPrime: 'Past prime', atPeak: 'At peak — open now',
+    approaching: 'Approaching peak', tooYoung: 'Still too young',
   },
   sommelier: {
     title: 'AI Sommelier', placeholder: 'Describe your dish or ask a question…',
@@ -72,6 +76,18 @@ const en = {
     caveMatch: 'In your cellar', suggestion: 'AI suggestion',
     findRecipes: 'Find associated recipes', recipesSource: 'via TheMealDB',
     recipesTitle: 'Recipes for', noRecipes: 'No recipes found for this dish.',
+    tonightTab: "What to drink tonight?", accordTab: 'Food & wine pairing',
+  },
+  sharing: {
+    title: 'Shared cellars',
+    shareMyCell: 'Share my cellar', acceptInvite: 'Accept an invitation',
+    inviteEmail: "Guest's email", createInvite: 'Create invitation',
+    inviteLink: 'Invitation link',
+    pending: 'Pending', accepted: 'Accepted',
+    myCaves: 'Accessible cellars', emptyCaves: 'No cellar shared with you yet.',
+    viewCave: 'View cellar', leaveShared: 'Leave',
+    revokeAccess: 'Revoke access', revokeConfirm: 'Revoke this access?',
+    leaveConfirm: 'Leave this shared cellar?',
   },
   scan: {
     title: 'Scan a label', dropzone: 'Drop a photo or click to choose',

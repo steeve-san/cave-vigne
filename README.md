@@ -39,6 +39,15 @@
 | 🌐 **Catalogue public** | Mode visiteur sans authentification (configurable) |
 | ⚙️ **Admin** | Gestion multi-provider IA, SMTP, catalogue public depuis l'UI |
 | 📱 **PWA + App Android** | Installable sur mobile/desktop + WebView native (caméra, swipe-to-refresh) |
+| 🍎 **App iOS** | Application SwiftUI (WKWebView) — caméra, swipe-back, hors-ligne |
+| 🏚️ **Caves partagées** | Invitations par email, accès lecture seule, gestion des permissions |
+| 📈 **Historique valeur** | Snapshot quotidien + graphique d'évolution sur 90 jours |
+| ⏳ **Tracker de maturité** | Vins classés : à l'apogée, approche, trop jeune, passé prime |
+| 🔴 **Alerte dernière bouteille** | Badge rouge quand il ne reste qu'une bouteille |
+| 📦 **Code-barres EAN** | Scanner le code EAN pour pré-remplir depuis Open Food Facts |
+| 📄 **Export PDF** | Impression de la cave filtrée (tableau stylisé via window.print) |
+| 🌙 **"Que boire ce soir ?"** | L'IA choisit dans votre cave selon occasion, convives, envie |
+| 🔎 **Région spotlight** | Analyse IA d'une région viticole depuis la carte France |
 
 ---
 
@@ -302,9 +311,9 @@ Les contributions sont les bienvenues ! Pour contribuer :
 
 ### Idées d'améliorations
 
-- [ ] Application iOS (Swift WebView)
-- [ ] Partage de cave entre utilisateurs (caves partagées)
-- [ ] Recherche full-text améliorée (MariaDB FTS)
+- [ ] Recherche full-text avancée (facets, ElasticSearch)
+- [ ] Application iOS — distribution App Store (compte Developer requis)
+- [ ] Caves partagées en écriture collaborative
 
 ---
 

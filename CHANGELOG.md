@@ -7,6 +7,43 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ---
 
+## [1.5.0] — 2026-04-08
+
+### Ajouté
+
+- 🏚️ **Caves partagées** — invitations par email, acceptation par lien/token, lecture seule, gestion des accès (révoquer, quitter) ; nouvelle page dédiée dans la sidebar
+- 📈 **Historique valeur cave** — snapshot quotidien à minuit, graphique ligne (Chart.js) sur le tableau de bord (90 jours)
+- ⏳ **Tracker de maturité** — widget dashboard classifiant vos vins en 4 catégories : passé l'apogée, à l'apogée, approche, trop jeune (basé sur `keep_until`)
+- 🔴 **Badge "dernière bouteille"** — alerte visuelle rouge quand `quantity === 1` dans la liste des vins
+- 📦 **Scanner code-barres EAN** — bouton dans la cave, saisie du code EAN 8–14 chiffres → Open Food Facts pré-remplit les champs du formulaire
+- 📄 **Export PDF** — impression de la liste des vins visible avec `window.print()` (tableau stylisé)
+- 🌙 **Sommelier "Que boire ce soir ?"** — nouvel onglet dans la page Sommelier : décrivez l'occasion, les convives, l'envie → l'IA choisit depuis votre cave (chips de suggestions incluses)
+- 🔎 **Région spotlight IA** — bouton "Analyse IA" sur la carte France → résumé IA de la région (terroir, cépages, garde, accord idéal, anecdote) + vos bouteilles en cave pour cette région
+- 🍎 **App iOS** — application SwiftUI (WKWebView) miroir de l'app Android : caméra, swipe-back, gestion hors-ligne, permissions caméra, user-agent personnalisé ; fichiers dans `ios/`
+
+### Backend
+- Nouveau module `backend/src/routes/sharing.js` — `GET /api/sharing`, `POST /invite`, `GET /accept/:token`, `DELETE /:id`, `GET /cave/:ownerId`
+- Nouvelle table SQL `shared_caves` — invitations avec token, permission, statut accepté
+- Nouvelle table SQL `cave_value_history` — snapshot quotidien valeur/bouteilles/références par utilisateur
+- `GET /api/wines/barcode/:ean` — lookup produit via Open Food Facts par code EAN
+- `GET /api/wines/value-history` — 90 derniers jours de snapshots
+- `POST /api/sommelier/recommend` — recommandation "ce soir" avec occasion/convives/humeur
+- `POST /api/sommelier/region-spotlight` — résumé IA + vos vins d'une région viticole
+- Cron minuit `0 0 * * *` → `snapshotCaveValues()` dans `notifications.js`
+
+### Frontend
+- Nouvelles pages : `SharedCavesPage` — invitation, acceptation, visualisation cave partagée
+- `Dashboard` : `import { Line }` chart.js, `valueHistory` query, aging tracker widget
+- `WinesPage` : `BarcodeModal`, `printWinesPDF()`, badge "dernière", boutons barre d'outils
+- `SommelierPage` : onglets "Accord" / "Que boire ce soir ?", `tonightMut`
+- `FranceMapPage` : `spotlightMut`, bouton "Analyse IA" par région, panneau résultat
+- `App.jsx` : route `/sharing`
+- `Layout.jsx` : lien sidebar "Caves partagées"
+- `api.js` : `winesAPI.barcode`, `winesAPI.valueHistory`, `sommelierAPI.recommend`, `sommelierAPI.regionSpotlight`, `sharingAPI`
+- `ios/` : app SwiftUI complète avec `CaveVigneApp.swift`, `ContentView.swift`, `WebView.swift`, `ErrorView.swift`, `Info.plist`, `README.md`
+
+---
+
 ## [1.4.0] — 2026-04-07
 
 ### Ajouté
@@ -127,6 +164,6 @@ et ce projet adhère au [Semantic Versioning](https://semver.org/lang/fr/).
 
 ## À venir
 
-- [ ] Application iOS (Swift WebView)
-- [ ] Partage de cave entre utilisateurs (caves partagées)
-- [ ] Recherche full-text améliorée (MariaDB FTS)
+- [ ] Recherche full-text avancée (facets, ElasticSearch)
+- [ ] App iOS — distribution App Store (compte Developer requis)
+- [ ] Caves partagées en écriture collaborative

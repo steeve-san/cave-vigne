@@ -2,14 +2,17 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Doughnut } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Doughnut, Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS, ArcElement, Tooltip, Legend,
+  LineElement, PointElement, LinearScale, CategoryScale, Filler,
+} from 'chart.js';
 import { winesAPI, spiritsAPI, sommelierAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useLang } from '../context/LangContext';
 import toast from 'react-hot-toast';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.register(ArcElement, Tooltip, Legend, LineElement, PointElement, LinearScale, CategoryScale, Filler);
 
 const TYPE_ICONS = { rouge: '🍷', blanc: '🥂', rosé: '🌸', pétillant: '✨', whisky: '🥃', rhum: '🍹', cognac: '🥃', armagnac: '🥃', calvados: '🍎', gin: '🍸', vodka: '🍸', autre: '🍶' };
 const TYPE_COLORS = { rouge: '#8B1A1A', blanc: '#C9A84C', rosé: '#C06080', pétillant: '#1A3A7A' };
@@ -22,6 +25,8 @@ export default function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useQuery({ queryKey: ['wine-stats'], queryFn: () => winesAPI.stats().then(r => r.data) });
   const { data: winesData } = useQuery({ queryKey: ['wines', { limit: 6, sort: 'created_at', order: 'DESC' }], queryFn: () => winesAPI.list({ limit: 6, sort: 'created_at', order: 'DESC' }).then(r => r.data) });
   const { data: spirits } = useQuery({ queryKey: ['spirits', {}], queryFn: () => spiritsAPI.list().then(r => r.data) });
+  const { data: valueHistory = [] } = useQuery({ queryKey: ['value-history'], queryFn: () => winesAPI.valueHistory().then(r => r.data), staleTime: 3_600_000 });
+  const { data: allWinesForAging } = useQuery({ queryKey: ['wines', { status: 'stock', limit: 100 }], queryFn: () => winesAPI.list({ status: 'stock', limit: 100 }).then(r => r.data) });
 
   const analyseMutation = useMutation({
     mutationFn: () => sommelierAPI.analyse().then(r => r.data),
@@ -56,6 +61,44 @@ export default function Dashboard() {
     cutout: '68%',
     animation: { animateRotate: true },
   };
+
+  // Value history line chart
+  const lineData = valueHistory.length >= 2 ? {
+    labels: valueHistory.map(r => {
+      const d = new Date(r.recorded_at);
+      return `${d.getDate()}/${d.getMonth() + 1}`;
+    }),
+    datasets: [{
+      label: 'Valeur cave (€)',
+      data: valueHistory.map(r => parseFloat(r.total_value) || 0),
+      fill: true,
+      borderColor: '#C9A84C',
+      backgroundColor: 'rgba(201,168,76,0.12)',
+      tension: 0.4,
+      pointRadius: 2,
+      pointHoverRadius: 5,
+    }],
+  } : null;
+
+  const lineOptions = {
+    responsive: true,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y.toLocaleString('fr-FR')} €` } } },
+    scales: {
+      x: { grid: { color: 'rgba(201,168,76,0.08)' }, ticks: { color: '#B09070', font: { size: 10 }, maxTicksLimit: 8 } },
+      y: { grid: { color: 'rgba(201,168,76,0.08)' }, ticks: { color: '#B09070', font: { size: 10 }, callback: v => `${v.toLocaleString('fr-FR')} €` } },
+    },
+  };
+
+  // Aging tracker
+  const now = new Date().getFullYear();
+  const agingWines = (allWinesForAging?.wines || [])
+    .filter(w => w.keep_until && !w.is_drunk && w.quantity > 0)
+    .map(w => ({ ...w, ku: parseInt(w.keep_until) }))
+    .sort((a, b) => a.ku - b.ku);
+  const pastPrime  = agingWines.filter(w => w.ku < now - 1);
+  const atPeak     = agingWines.filter(w => w.ku >= now - 1 && w.ku <= now + 2);
+  const approaching = agingWines.filter(w => w.ku > now + 2 && w.ku <= now + 5);
+  const tooYoung   = agingWines.filter(w => w.ku > now + 5);
 
   return (
     <div className="fade-in">
@@ -226,6 +269,72 @@ export default function Dashboard() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Value history + Aging tracker */}
+      <div className="row g-3 mb-4">
+        {/* Cave value history */}
+        {lineData && (
+          <div className="col-lg-7">
+            <div className="card h-100">
+              <div className="card-header"><h6 className="card-title"><i className="bi bi-graph-up me-2" style={{ color: 'var(--cv-gold)' }}></i>Évolution de la valeur de la cave</h6></div>
+              <div className="card-body p-3">
+                <Line data={lineData} options={lineOptions} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Aging tracker */}
+        {agingWines.length > 0 && (
+          <div className={lineData ? 'col-lg-5' : 'col-12'}>
+            <div className="card h-100">
+              <div className="card-header"><h6 className="card-title"><i className="bi bi-hourglass-split me-2" style={{ color: 'var(--cv-gold)' }}></i>Maturité des vins</h6></div>
+              <div className="card-body p-3" style={{ overflowY: 'auto', maxHeight: 280 }}>
+                {pastPrime.length > 0 && (
+                  <div className="mb-3">
+                    <div style={{ fontSize: '0.62rem', letterSpacing: 2, color: '#dc3545', textTransform: 'uppercase', marginBottom: 4 }}>⚠ Passé l'apogée ({pastPrime.length})</div>
+                    {pastPrime.slice(0, 3).map(w => (
+                      <div key={w.id} className="d-flex justify-content-between align-items-center py-1" style={{ borderBottom: '0.5px solid var(--cv-border)', fontSize: '0.8rem' }}>
+                        <span style={{ color: 'var(--cv-text)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
+                        <span style={{ color: '#dc3545', flexShrink: 0, marginLeft: 8 }}>{w.ku} ×{w.quantity}</span>
+                      </div>
+                    ))}
+                    {pastPrime.length > 3 && <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginTop: 2 }}>+{pastPrime.length - 3} autres</div>}
+                  </div>
+                )}
+                {atPeak.length > 0 && (
+                  <div className="mb-3">
+                    <div style={{ fontSize: '0.62rem', letterSpacing: 2, color: '#4CAF50', textTransform: 'uppercase', marginBottom: 4 }}>🍷 À l'apogée — ouvrir maintenant ({atPeak.length})</div>
+                    {atPeak.slice(0, 4).map(w => (
+                      <div key={w.id} className="d-flex justify-content-between align-items-center py-1" style={{ borderBottom: '0.5px solid var(--cv-border)', fontSize: '0.8rem' }}>
+                        <span style={{ color: 'var(--cv-text)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
+                        <span style={{ color: '#4CAF50', flexShrink: 0, marginLeft: 8 }}>{w.ku} ×{w.quantity}</span>
+                      </div>
+                    ))}
+                    {atPeak.length > 4 && <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginTop: 2 }}>+{atPeak.length - 4} autres</div>}
+                  </div>
+                )}
+                {approaching.length > 0 && (
+                  <div className="mb-2">
+                    <div style={{ fontSize: '0.62rem', letterSpacing: 2, color: 'var(--cv-gold)', textTransform: 'uppercase', marginBottom: 4 }}>⏳ Approche de l'apogée ({approaching.length})</div>
+                    {approaching.slice(0, 3).map(w => (
+                      <div key={w.id} className="d-flex justify-content-between align-items-center py-1" style={{ borderBottom: '0.5px solid var(--cv-border)', fontSize: '0.8rem' }}>
+                        <span style={{ color: 'var(--cv-text)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
+                        <span style={{ color: 'var(--cv-gold)', flexShrink: 0, marginLeft: 8 }}>{w.ku} ×{w.quantity}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {tooYoung.length > 0 && (
+                  <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginTop: 4 }}>
+                    <i className="bi bi-lock me-1"></i>{tooYoung.length} vin{tooYoung.length > 1 ? 's' : ''} encore trop jeune{tooYoung.length > 1 ? 's' : ''}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="row g-3">

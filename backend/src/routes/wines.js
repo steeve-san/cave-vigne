@@ -344,6 +344,41 @@ Laisse un champ null si tu n'es pas certain. Ne retourne QUE le JSON.`;
   }
 });
 
+// ─── GET /api/wines/barcode/:ean — lookup by EAN barcode via Open Food Facts ──
+router.get('/barcode/:ean', auth, async (req, res) => {
+  const { ean } = req.params;
+  if (!/^\d{8,14}$/.test(ean)) return res.status(400).json({ error: 'Code-barres invalide (8-14 chiffres)' });
+  try {
+    const url = `https://world.openfoodfacts.org/api/v0/product/${ean}.json`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const data = await resp.json();
+    if (data.status !== 1) return res.status(404).json({ error: 'Produit introuvable dans Open Food Facts' });
+    const p = data.product;
+    res.json({
+      name:     p.product_name_fr || p.product_name || '',
+      producer: p.brands || '',
+      country:  (p.countries_tags?.[0] || '').replace(/^en:/, ''),
+      region:   p.origins || '',
+      grapes:   p.ingredients_text_fr || p.ingredients_text || '',
+      notes:    p.generic_name_fr || p.generic_name || '',
+    });
+  } catch (err) {
+    res.status(503).json({ error: 'Service Open Food Facts indisponible' });
+  }
+});
+
+// ─── GET /api/wines/value-history — cave value snapshots (last 90 days) ───────
+router.get('/value-history', auth, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT recorded_at, total_value, bottle_count, ref_count
+       FROM cave_value_history WHERE user_id=? ORDER BY recorded_at ASC LIMIT 90`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
 // ─── GET /api/wines/:id/enrich — enrichissement depuis sources externes ────────
 // Open Food Facts (free, no key required)
 router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) => {

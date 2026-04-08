@@ -183,6 +183,87 @@ router.get('/recipes', auth, async (req, res) => {
   }
 });
 
+// POST /api/sommelier/recommend — "what to open tonight?"
+router.post('/recommend', auth, async (req, res) => {
+  const { ok, provider, error } = await checkAIAvailable();
+  if (!ok) return res.status(503).json({ error: error || 'Fournisseur IA non configuré' });
+
+  const { occasion, guests, mood } = req.body;
+  try {
+    const [wines] = await db.query(
+      `SELECT name, type, vintage, appellation, grapes, region, country, keep_until
+       FROM wines WHERE user_id=? AND is_drunk=0 AND quantity>0 ORDER BY RAND() LIMIT 40`,
+      [req.user.id]
+    );
+    if (!wines.length) return res.status(404).json({ error: 'Cave vide' });
+
+    const now = new Date().getFullYear();
+    const caveList = wines.map(w =>
+      `- ${w.name} (${w.type}, ${w.vintage || 'NV'}, ${w.region || w.country || ''})${w.keep_until && w.keep_until <= now + 1 ? ' [À BOIRE BIENTÔT]' : ''}`
+    ).join('\n');
+
+    const ctx = [
+      occasion ? `Occasion: ${occasion}` : '',
+      guests   ? `Convives: ${guests}`   : '',
+      mood     ? `Envie: ${mood}`        : '',
+    ].filter(Boolean).join(', ');
+
+    const prompt = `Tu es un sommelier passionné. Aide-moi à choisir quoi ouvrir ce soir.
+${ctx ? `Contexte: ${ctx}\n` : ''}Cave disponible:\n${caveList}
+
+Réponds UNIQUEMENT en JSON valide:
+{"recommendation":{"name":"nom exact du vin en cave","type":"rouge|blanc|rosé|pétillant","why":"explication enthousiaste 2-3 phrases","temp":"température de service idéale","decant":"oui|non|recommandé","food":"suggestion d'accord mets/vin"},"alternatives":[{"name":"...","why":"..."}],"conseil_ambiance":"conseil court pour la soirée"}`;
+
+    const text = await callAI([{ role: 'user', content: prompt }], 700);
+    let result;
+    try { result = JSON.parse(text.replace(/```json|```/g, '').trim()); }
+    catch { result = { recommendation: { name: '', why: text }, alternatives: [] }; }
+    result._provider = provider;
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur IA' });
+  }
+});
+
+// POST /api/sommelier/region-spotlight — AI summary of a wine region + your wines in it
+router.post('/region-spotlight', auth, async (req, res) => {
+  const { ok, provider, error } = await checkAIAvailable();
+  if (!ok) return res.status(503).json({ error: error || 'Fournisseur IA non configuré' });
+
+  const { region } = req.body;
+  if (!region) return res.status(400).json({ error: 'Région requise' });
+
+  try {
+    const [wines] = await db.query(
+      `SELECT name, vintage, appellation, grapes, quantity FROM wines
+       WHERE user_id=? AND is_drunk=0 AND quantity>0
+         AND (region LIKE ? OR appellation LIKE ?)
+       ORDER BY vintage DESC LIMIT 20`,
+      [req.user.id, `%${region}%`, `%${region}%`]
+    );
+
+    const wineList = wines.map(w =>
+      `- ${w.name}${w.vintage ? ` ${w.vintage}` : ''}${w.appellation ? `, ${w.appellation}` : ''} ×${w.quantity}`
+    ).join('\n');
+
+    const prompt = `Tu es un expert en oenologie. Fais un portrait concis de la région viticole "${region}" (France).
+${wines.length ? `\nVins de cette région en cave de l'utilisateur:\n${wineList}` : ''}
+
+Réponds en JSON:
+{"region":"${region}","description":"présentation enthousiaste en 3-4 phrases (terroir, cépages typiques, styles)","cepages_emblematiques":["..."],"appellations_phares":["..."],"garde_typique":"ex: 5-15 ans pour les rouges","accord_ideal":"accord mets/vins emblématique","anecdote":"fait historique ou curiosité en 1 phrase"}`;
+
+    const text = await callAI([{ role: 'user', content: prompt }], 600);
+    let result;
+    try { result = JSON.parse(text.replace(/```json|```/g, '').trim()); }
+    catch { result = { region, description: text }; }
+    result._provider = provider;
+    result.cave_wines = wines;
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Erreur IA' });
+  }
+});
+
 // GET /api/sommelier/providers — list available providers and current config
 router.get('/providers', auth, async (req, res) => {
   const { getAIConfig } = require('../config/ai');

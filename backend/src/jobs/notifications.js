@@ -14,7 +14,15 @@ function startNotifications() {
       console.error('[notifications] Error:', err.message);
     }
   });
-  console.log('[notifications] Scheduled daily at 08:00');
+
+  // Snapshot cave value every day at midnight
+  cron.schedule('0 0 * * *', async () => {
+    console.log('[notifications] Snapshotting cave values...');
+    try { await snapshotCaveValues(); }
+    catch (err) { console.error('[notifications] Snapshot error:', err.message); }
+  });
+
+  console.log('[notifications] Scheduled daily at 08:00 (alerts) and 00:00 (snapshot)');
 }
 
 async function sendKeepUntilAlerts() {
@@ -72,4 +80,30 @@ async function cleanupExpiredTokens() {
   await db.query('DELETE FROM password_resets WHERE expires_at < NOW() OR used = 1');
 }
 
-module.exports = { startNotifications };
+async function snapshotCaveValues() {
+  const today = new Date().toISOString().slice(0, 10);
+  const [users] = await db.query(
+    'SELECT DISTINCT user_id FROM wines WHERE is_drunk=0 AND quantity>0'
+  );
+  for (const { user_id } of users) {
+    const [[{ value, bottles, refs }]] = await db.query(
+      `SELECT SUM(COALESCE(price*quantity,0)) as value,
+              SUM(quantity) as bottles,
+              COUNT(*) as refs
+       FROM wines WHERE user_id=? AND is_drunk=0 AND quantity>0`,
+      [user_id]
+    );
+    await db.query(
+      `INSERT INTO cave_value_history (user_id, total_value, bottle_count, ref_count, recorded_at)
+       VALUES (?,?,?,?,?)
+       ON DUPLICATE KEY UPDATE
+         total_value=VALUES(total_value),
+         bottle_count=VALUES(bottle_count),
+         ref_count=VALUES(ref_count)`,
+      [user_id, value || 0, bottles || 0, refs || 0, today]
+    );
+  }
+  console.log(`[notifications] Snapshot done for ${users.length} user(s)`);
+}
+
+module.exports = { startNotifications, snapshotCaveValues };

@@ -1,8 +1,9 @@
 // src/pages/FranceMapPage.jsx
 import { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { winesAPI } from '../services/api';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { winesAPI, sommelierAPI } from '../services/api';
 import * as d3 from 'd3';
+import toast from 'react-hot-toast';
 
 // Geographic coordinates [lon, lat] of wine region centres
 const FR_REGIONS = [
@@ -93,6 +94,13 @@ export default function FranceMapPage() {
   const tooltipRef = useRef(null);
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState(null);
+  const [spotlight, setSpotlight] = useState(null);
+
+  const spotlightMut = useMutation({
+    mutationFn: (region) => sommelierAPI.regionSpotlight(region).then(r => r.data),
+    onSuccess: (data) => setSpotlight(data),
+    onError: (err) => toast.error(err.response?.data?.error || 'Erreur IA'),
+  });
   const { data: winesData } = useQuery({
     queryKey: ['wines', { limit: 200 }],
     queryFn: () => winesAPI.list({ limit: 200 }).then(r => r.data),
@@ -191,7 +199,7 @@ export default function FranceMapPage() {
           tt.classList.add('visible');
         })
           .on('mouseleave', () => tooltipRef.current?.classList.remove('visible'))
-          .on('click', () => setSelected(reg));
+          .on('click', () => { setSelected(reg); setSpotlight(null); });
       });
     }
   }, [filter, wines]);
@@ -233,15 +241,25 @@ export default function FranceMapPage() {
 
       {selected && (
         <div className="card fade-in">
-          <div className="card-header d-flex justify-content-between">
-            <h6 className="card-title mb-0">
-              {selected.name}{' '}
-              {caveByRegion[selected.id] ? (
-                <span className="badge-open ms-2">{caveByRegion[selected.id]} btl.</span>
-              ) : null}
-            </h6>
+          <div className="card-header d-flex justify-content-between align-items-center">
+            <div className="d-flex align-items-center gap-2">
+              <h6 className="card-title mb-0">
+                {selected.name}{' '}
+                {caveByRegion[selected.id] ? (
+                  <span className="badge-open ms-2">{caveByRegion[selected.id]} btl.</span>
+                ) : null}
+              </h6>
+              <button className="btn btn-sm btn-outline-gold" style={{ fontSize: '0.72rem' }}
+                onClick={() => spotlightMut.mutate(selected.name)}
+                disabled={spotlightMut.isPending}>
+                {spotlightMut.isPending
+                  ? <span className="spinner-border spinner-border-sm me-1" />
+                  : <i className="bi bi-stars me-1"></i>}
+                Analyse IA
+              </button>
+            </div>
             <button className="btn btn-sm" style={{ color: 'var(--cv-text3)', background: 'none', border: 'none' }}
-              onClick={() => setSelected(null)}>
+              onClick={() => { setSelected(null); setSpotlight(null); }}>
               <i className="bi bi-x-lg"></i>
             </button>
           </div>
@@ -276,6 +294,41 @@ export default function FranceMapPage() {
             <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--cv-text2)', fontStyle: 'italic' }}>
               {selected.nota}
             </div>
+
+            {/* AI Spotlight */}
+            {spotlight && spotlight.region === selected.name && (
+              <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--cv-border)' }}>
+                <div style={{ fontSize: '0.65rem', letterSpacing: 2, color: 'var(--cv-gold)', textTransform: 'uppercase', marginBottom: 8 }}>
+                  <i className="bi bi-stars me-1"></i>Analyse IA — {spotlight.region}
+                </div>
+                {spotlight.description && (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--cv-text)', lineHeight: 1.7, fontFamily: 'Cormorant Garamond,serif', fontSize: '1rem' }}>
+                    {spotlight.description}
+                  </p>
+                )}
+                <div className="row g-2 mt-1">
+                  {spotlight.garde_typique && (
+                    <div className="col-auto">
+                      <span style={{ fontSize: '0.75rem', background: 'var(--cv-bg4)', borderRadius: 6, padding: '4px 10px', color: 'var(--cv-text2)' }}>
+                        <i className="bi bi-hourglass-split me-1" style={{ color: 'var(--cv-gold)' }}></i>Garde : {spotlight.garde_typique}
+                      </span>
+                    </div>
+                  )}
+                  {spotlight.accord_ideal && (
+                    <div className="col-auto">
+                      <span style={{ fontSize: '0.75rem', background: 'var(--cv-bg4)', borderRadius: 6, padding: '4px 10px', color: 'var(--cv-text2)' }}>
+                        <i className="bi bi-fork-knife me-1" style={{ color: 'var(--cv-gold)' }}></i>{spotlight.accord_ideal}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {spotlight.anecdote && (
+                  <p style={{ fontSize: '0.78rem', color: 'var(--cv-text3)', fontStyle: 'italic', marginTop: 8 }}>
+                    💡 {spotlight.anecdote}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

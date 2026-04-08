@@ -57,16 +57,18 @@ export const authAPI = {
 
 // ─── Wines ────────────────────────────────────────────────────────────────────
 export const winesAPI = {
-  list:      (params) => api.get('/wines', { params }),
-  create:    (data)   => api.post('/wines', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  update:    (id, data) => api.put(`/wines/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  remove:    (id)     => api.delete(`/wines/${id}`),
-  addAccord: (id, data) => api.post(`/wines/${id}/accords`, data),
-  stats:     ()       => api.get('/wines/stats'),
-  enrich:    (id)     => api.get(`/wines/${id}/enrich`),
-  aiEnrich:  (id)     => api.post(`/wines/${id}/ai-enrich`),
-  exportCsv: ()       => api.get('/wines/export', { responseType: 'blob' }),
-  importCsv: (file)   => { const fd = new FormData(); fd.append('file', file); return api.post('/wines/import', fd); },
+  list:         (params)     => api.get('/wines', { params }),
+  create:       (data)       => api.post('/wines', data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  update:       (id, data)   => api.put(`/wines/${id}`, data, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  remove:       (id)         => api.delete(`/wines/${id}`),
+  addAccord:    (id, data)   => api.post(`/wines/${id}/accords`, data),
+  stats:        ()           => api.get('/wines/stats'),
+  enrich:       (id)         => api.get(`/wines/${id}/enrich`),
+  aiEnrich:     (id)         => api.post(`/wines/${id}/ai-enrich`),
+  barcode:      (ean)        => api.get(`/wines/barcode/${ean}`),
+  valueHistory: ()           => api.get('/wines/value-history'),
+  exportCsv:    ()           => api.get('/wines/export', { responseType: 'blob' }),
+  importCsv:    (file)       => { const fd = new FormData(); fd.append('file', file); return api.post('/wines/import', fd); },
 };
 
 // ─── Spirits ──────────────────────────────────────────────────────────────────
@@ -79,12 +81,14 @@ export const spiritsAPI = {
 
 // ─── Sommelier ────────────────────────────────────────────────────────────────
 export const sommelierAPI = {
-  accord:    (query)    => api.post('/sommelier/accord', { query }),
-  scan:      (formData) => api.post('/sommelier/scan', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
-  history:   ()         => api.get('/sommelier/history'),
-  recipes:   (food)     => api.get('/sommelier/recipes', { params: { food } }),
-  analyse:   ()         => api.post('/sommelier/analyse'),
-  providers: ()         => api.get('/sommelier/providers'),
+  accord:          (query)  => api.post('/sommelier/accord', { query }),
+  scan:            (fd)     => api.post('/sommelier/scan', fd, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  history:         ()       => api.get('/sommelier/history'),
+  recipes:         (food)   => api.get('/sommelier/recipes', { params: { food } }),
+  analyse:         ()       => api.post('/sommelier/analyse'),
+  providers:       ()       => api.get('/sommelier/providers'),
+  recommend:       (data)   => api.post('/sommelier/recommend', data),
+  regionSpotlight: (region) => api.post('/sommelier/region-spotlight', { region }),
 };
 
 // ─── Tasting notes ────────────────────────────────────────────────────────────
@@ -121,6 +125,15 @@ export const totpAPI = {
   confirm: (token) => api.post('/auth/totp/confirm', { token }),
   disable: (password) => api.post('/auth/totp/disable', { password }),
   status:  () => api.get('/auth/totp/status'),
+};
+
+// ─── Sharing ──────────────────────────────────────────────────────────────────
+export const sharingAPI = {
+  list:    ()                    => api.get('/sharing'),
+  invite:  (email, permission)   => api.post('/sharing/invite', { email, permission }),
+  accept:  (token)               => api.get(`/sharing/accept/${token}`),
+  revoke:  (id)                  => api.delete(`/sharing/${id}`),
+  getCave: (ownerId)             => api.get(`/sharing/cave/${ownerId}`),
 };
 
 // ─── Health ───────────────────────────────────────────────────────────────────

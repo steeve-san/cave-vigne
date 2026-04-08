@@ -176,6 +176,35 @@ async function migrate() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       INDEX idx_user (user_id)
     ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS cave_value_history (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      total_value DECIMAL(10,2) DEFAULT 0,
+      bottle_count INT DEFAULT 0,
+      ref_count INT DEFAULT 0,
+      recorded_at DATE NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE KEY unique_user_date (user_id, recorded_at),
+      INDEX idx_user (user_id)
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS shared_caves (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      owner_id INT NOT NULL,
+      guest_id INT,
+      invite_email VARCHAR(255) NOT NULL,
+      token VARCHAR(100) NOT NULL UNIQUE,
+      permission ENUM('read','write') DEFAULT 'read',
+      accepted BOOLEAN DEFAULT FALSE,
+      accepted_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (guest_id) REFERENCES users(id) ON DELETE SET NULL,
+      INDEX idx_owner (owner_id),
+      INDEX idx_guest (guest_id),
+      INDEX idx_token (token(50))
+    ) ENGINE=InnoDB;
   `;
 
   await conn.query(schema);

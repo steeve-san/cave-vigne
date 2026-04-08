@@ -5,6 +5,42 @@ import { winesAPI, tastingAPI } from '../services/api';
 import { useLang } from '../context/LangContext';
 import toast from 'react-hot-toast';
 
+// Print-to-PDF: open a print window with a styled sheet of all visible wines
+function printWinesPDF(wines) {
+  const rows = wines.map(w => `
+    <tr>
+      <td>${w.name}</td>
+      <td>${w.vintage || '—'}</td>
+      <td>${w.type}</td>
+      <td>${w.appellation || w.region || '—'}</td>
+      <td>${w.grapes || '—'}</td>
+      <td>${w.quantity}</td>
+      <td>${w.price ? w.price + ' €' : '—'}</td>
+      <td>${w.keep_until || '—'}</td>
+    </tr>`).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Cave &amp; Vigne</title>
+  <style>
+    body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a0f0f;padding:20px}
+    h1{font-size:18px;font-family:Georgia,serif;color:#8b1a1a;margin-bottom:4px}
+    p{font-size:10px;color:#888;margin-bottom:12px}
+    table{width:100%;border-collapse:collapse}
+    th{background:#8b1a1a;color:#fff;padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.5px}
+    td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top}
+    tr:nth-child(even) td{background:#fdf8f2}
+    @media print{@page{margin:1.5cm}}
+  </style></head><body>
+  <h1>Cave &amp; Vigne — Export cave</h1>
+  <p>Généré le ${new Date().toLocaleDateString('fr-FR')} · ${wines.length} vin(s)</p>
+  <table><thead><tr>
+    <th>Nom</th><th>Mill.</th><th>Type</th><th>Appellation / Région</th>
+    <th>Cépages</th><th>Qté</th><th>Prix</th><th>Garder jusqu'à</th>
+  </tr></thead><tbody>${rows}</tbody></table>
+  <script>window.onload=()=>{window.print();window.close();}<\/script>
+  </body></html>`;
+  const w = window.open('', '_blank', 'width=900,height=700');
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
 const TYPES = ['rouge', 'blanc', 'rosé', 'pétillant'];
 const TYPE_ICONS = { rouge: '🍷', blanc: '🥂', rosé: '🌸', pétillant: '✨' };
 const EMPTY_FORM = {
@@ -41,7 +77,7 @@ function PhotoPicker({ label, current, onChange, t }) {
   );
 }
 
-function WineModal({ wine, onClose, onSave }) {
+function WineModal({ wine, prefill, onClose, onSave }) {
   const { t } = useLang();
   const [tab, setTab] = useState('vin');
   const [form, setForm] = useState(wine ? {
@@ -50,7 +86,7 @@ function WineModal({ wine, onClose, onSave }) {
     position: wine.position || '', notes: wine.notes || '',
     domain_website: wine.domain_website || '', domain_description: wine.domain_description || '',
     soil_type: wine.soil_type || '', altitude: wine.altitude || '',
-  } : { ...EMPTY_FORM });
+  } : prefill ? { ...EMPTY_FORM, ...prefill } : { ...EMPTY_FORM });
   const [labelFile, setLabelFile] = useState(null);
   const [bottleFile, setBottleFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -381,6 +417,59 @@ function WineModal({ wine, onClose, onSave }) {
   );
 }
 
+function BarcodeModal({ onClose, onResult }) {
+  const [ean, setEan] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleLookup = async () => {
+    const code = ean.trim();
+    if (!/^\d{8,14}$/.test(code)) { setError('Code EAN invalide (8–14 chiffres)'); return; }
+    setLoading(true); setError('');
+    try {
+      const r = await winesAPI.barcode(code);
+      onResult(r.data);
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Produit introuvable');
+    } finally { setLoading(false); }
+  };
+
+  const handleKeyDown = (e) => { if (e.key === 'Enter') handleLookup(); };
+
+  return (
+    <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: 400 }}>
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title"><i className="bi bi-upc-scan me-2"></i>Scanner un code-barres</h5>
+            <button className="btn-close" onClick={onClose} />
+          </div>
+          <div className="modal-body">
+            <p style={{ fontSize: '0.82rem', color: 'var(--cv-text2)' }}>
+              Entrez ou scannez le code EAN de la bouteille (8 à 14 chiffres) pour pré-remplir les informations depuis Open Food Facts.
+            </p>
+            <div className="input-group mb-2">
+              <span className="input-group-text"><i className="bi bi-upc"></i></span>
+              <input className="form-control" placeholder="ex: 3760076020079" value={ean}
+                onChange={e => setEan(e.target.value)} onKeyDown={handleKeyDown}
+                type="tel" inputMode="numeric" autoFocus />
+            </div>
+            {error && <div className="alert alert-danger py-2" style={{ fontSize: '0.82rem' }}>{error}</div>}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-outline-gold" onClick={onClose}>Annuler</button>
+            <button className="btn btn-gold" onClick={handleLookup} disabled={loading || !ean.trim()}>
+              {loading ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-search me-1"></i>}
+              Rechercher
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AccordModal({ wine, onClose }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({ food: '', stars: 0, notes: '' });
@@ -425,9 +514,10 @@ export default function WinesPage() {
   const [search, setSearch] = useState('');
   const [typeF, setTypeF] = useState('all');
   const [statusF, setStatusF] = useState('all');
-  const [modal, setModal] = useState(null); // null | { mode: 'add'|'edit'|'accord', wine? }
+  const [modal, setModal] = useState(null); // null | { mode: 'add'|'edit'|'accord'|'barcode', wine? }
   const [selected, setSelected] = useState(new Set());
   const [bulkMode, setBulkMode] = useState(false);
+  const [pendingBarcode, setPendingBarcode] = useState(null); // pre-filled form from barcode scan
   const importRef = useRef();
 
   const params = { search: search || undefined, type: typeF !== 'all' ? typeF : undefined, status: statusF !== 'all' ? statusF : undefined, limit: 100 };
@@ -487,6 +577,12 @@ export default function WinesPage() {
     return next;
   });
 
+  const handleBarcodeResult = (data) => {
+    setPendingBarcode(data);
+    setModal({ mode: 'add', prefill: data });
+    toast.success('Produit trouvé — vérifiez et complétez les informations');
+  };
+
   const wines = data?.wines || [];
   const total = data?.total || 0;
 
@@ -528,6 +624,12 @@ export default function WinesPage() {
             <input ref={importRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImport} />
             <button className={`btn btn-sm ${bulkMode ? 'btn-gold' : 'btn-outline-gold'}`} onClick={() => { setBulkMode(v => !v); setSelected(new Set()); }} title="Sélection multiple">
               <i className="bi bi-check2-square"></i>
+            </button>
+            <button className="btn btn-outline-gold btn-sm" onClick={() => setModal({ mode: 'barcode' })} title="Scanner code-barres">
+              <i className="bi bi-upc-scan"></i>
+            </button>
+            <button className="btn btn-outline-gold btn-sm" onClick={() => printWinesPDF(wines)} title="Exporter en PDF" disabled={!wines.length}>
+              <i className="bi bi-file-pdf"></i>
             </button>
             <button className="btn btn-gold btn-sm" onClick={() => setModal({ mode: 'add' })}>
               <i className="bi bi-plus me-1"></i>Ajouter
@@ -580,7 +682,12 @@ export default function WinesPage() {
                   <div className="item-meta">{[w.vintage, w.appellation, w.grapes].filter(Boolean).join(' · ')}</div>
                 </div>
                 <div className="d-flex align-items-center gap-2">
-                  {w.is_drunk || w.quantity === 0 ? <span className="badge-drunk">bue</span> : <span className="badge-stock">cave</span>}
+                  {w.is_drunk || w.quantity === 0
+                    ? <span className="badge-drunk">bue</span>
+                    : w.quantity === 1
+                      ? <span className="badge" style={{ background: 'rgba(220,53,69,0.18)', color: '#dc3545', border: '0.5px solid #dc3545', fontSize: '0.65rem', padding: '2px 6px', borderRadius: 4 }}>dernière</span>
+                      : <span className="badge-stock">cave</span>
+                  }
                   <span className="item-qty">{w.is_drunk ? '✓' : w.quantity}</span>
                   <div className="dropdown">
                     <button className="btn btn-sm" style={{ color: 'var(--cv-text3)', background: 'none', border: 'none' }} data-bs-toggle="dropdown">
@@ -607,9 +714,10 @@ export default function WinesPage() {
       )}
 
       {/* Modals */}
-      {modal?.mode === 'add' && <WineModal onClose={() => setModal(null)} onSave={(fd) => addMutation.mutateAsync(fd)} />}
+      {modal?.mode === 'add' && <WineModal prefill={modal.prefill} onClose={() => { setModal(null); setPendingBarcode(null); }} onSave={(fd) => addMutation.mutateAsync(fd)} />}
       {modal?.mode === 'edit' && <WineModal wine={modal.wine} onClose={() => setModal(null)} onSave={(fd) => editMutation.mutateAsync({ id: modal.wine.id, fd })} />}
       {modal?.mode === 'accord' && <AccordModal wine={modal.wine} onClose={() => setModal(null)} />}
+      {modal?.mode === 'barcode' && <BarcodeModal onClose={() => setModal(null)} onResult={handleBarcodeResult} />}
     </div>
   );
 }
