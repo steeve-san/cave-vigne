@@ -302,7 +302,7 @@ export default function FranceMapPage() {
                   <i className="bi bi-stars me-1"></i>Analyse IA — {spotlight.region}
                 </div>
                 {spotlight.description && (
-                  <p style={{ fontSize: '0.85rem', color: 'var(--cv-text)', lineHeight: 1.7, fontFamily: 'Cormorant Garamond,serif', fontSize: '1rem' }}>
+                  <p style={{ fontSize: '1rem', color: 'var(--cv-text)', lineHeight: 1.7, fontFamily: 'Cormorant Garamond,serif' }}>
                     {spotlight.description}
                   </p>
                 )}
