@@ -51,6 +51,7 @@ app.use('/api/tasting',  require('./routes/tasting'));
 app.use('/api/wishlist', require('./routes/wishlist'));
 app.use('/api/sharing',  require('./routes/sharing'));
 app.use('/api/beers',    require('./routes/beers'));
+app.use('/api/stats',    require('./routes/stats'));
 
 // Scheduled jobs
 require('./jobs/notifications').startNotifications();

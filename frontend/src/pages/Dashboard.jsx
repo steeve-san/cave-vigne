@@ -107,6 +107,85 @@ function CocktailGenerator({ spirits, beers, t }) {
   );
 }
 
+// ── Soon-peak accord widget ───────────────────────────────────────────────────
+function SoonPeakWidget({ wines, t }) {
+  const [accords, setAccords] = useState({});
+  const [loading, setLoading] = useState({});
+
+  const getAccord = async (wine) => {
+    setLoading(s => ({ ...s, [wine.id]: true }));
+    const query = `Quel accord mets-vins suggères-tu pour un ${wine.name}${wine.vintage ? ' ' + wine.vintage : ''}${wine.appellation ? ', ' + wine.appellation : ''}${wine.grapes ? ', cépages ' + wine.grapes : ''} ? Donne 3 suggestions courtes de plats en 1-2 lignes.`;
+    try {
+      const r = await sommelierAPI.accord(query);
+      setAccords(s => ({ ...s, [wine.id]: r.data?.result || r.data?.explication || '' }));
+    } catch {
+      setAccords(s => ({ ...s, [wine.id]: 'Erreur lors de la suggestion' }));
+    } finally {
+      setLoading(s => ({ ...s, [wine.id]: false }));
+    }
+  };
+
+  if (!wines || wines.length === 0) return null;
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h6 className="card-title mb-0">
+          <i className="bi bi-alarm me-2" style={{ color: 'var(--cv-gold)' }} />
+          {t('dashboard.soonPeakTitle')}
+        </h6>
+      </div>
+      <div className="card-body p-3">
+        <p style={{ fontSize: '0.78rem', color: 'var(--cv-text3)', marginBottom: 12 }}>
+          {t('dashboard.soonPeakHint')}
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {wines.map(w => (
+            <div key={w.id} style={{ background: 'var(--cv-bg3)', borderRadius: 8, padding: '10px 12px', border: '1px solid var(--cv-border)' }}>
+              <div className="d-flex align-items-start justify-content-between gap-2">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: 'Cormorant Garamond,serif', fontSize: '0.92rem', color: 'var(--cv-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {w.name}{w.vintage ? ` ${w.vintage}` : ''}
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginTop: 2 }}>
+                    {[w.appellation, w.region, w.grapes].filter(Boolean).join(' · ')}
+                    <span style={{ marginLeft: 6, color: 'var(--cv-gold)' }}>
+                      — {t('dashboard.untilYear')} {w.keep_until}
+                    </span>
+                  </div>
+                  {accords[w.id] && (
+                    <div style={{ fontSize: '0.78rem', color: 'var(--cv-text)', marginTop: 6, lineHeight: 1.55,
+                                  borderLeft: '2px solid var(--cv-gold)', paddingLeft: 8 }}>
+                      {accords[w.id]}
+                    </div>
+                  )}
+                </div>
+                <div style={{ flexShrink: 0 }}>
+                  <span style={{ fontSize: '0.68rem', padding: '2px 8px', borderRadius: 3,
+                                  background: 'rgba(201,168,76,0.12)', color: 'var(--cv-gold)' }}>
+                    ×{w.quantity}
+                  </span>
+                  {!accords[w.id] && (
+                    <button className="btn btn-sm btn-outline-gold d-block mt-1"
+                      style={{ fontSize: '0.65rem', padding: '2px 8px', whiteSpace: 'nowrap' }}
+                      disabled={loading[w.id]}
+                      onClick={() => getAccord(w)}>
+                      {loading[w.id]
+                        ? <span className="spinner-border spinner-border-sm" />
+                        : <><i className="bi bi-fork-knife me-1" />{t('dashboard.getAccord')}</>
+                      }
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { user } = useAuth();
@@ -119,6 +198,7 @@ export default function Dashboard() {
   const { data: beers }                             = useQuery({ queryKey: ['beers', {}], queryFn: () => beersAPI.list().then(r => r.data) });
   const { data: valueHistory = [] }                 = useQuery({ queryKey: ['value-history'], queryFn: () => winesAPI.valueHistory().then(r => r.data), staleTime: 3_600_000 });
   const { data: allWinesForAging }                  = useQuery({ queryKey: ['wines', { status: 'stock', limit: 100 }], queryFn: () => winesAPI.list({ status: 'stock', limit: 100 }).then(r => r.data) });
+  const { data: soonPeakWines = [] }                = useQuery({ queryKey: ['soon-peak'], queryFn: () => winesAPI.soonPeak().then(r => r.data), staleTime: 300_000 });
 
   const analyseMutation = useMutation({
     mutationFn: () => sommelierAPI.analyse().then(r => r.data),
@@ -287,6 +367,15 @@ export default function Dashboard() {
           <CocktailGenerator spirits={spirits} beers={beers} t={t} />
         </div>
       </div>
+
+      {/* Soon-peak accord widget */}
+      {soonPeakWines.length > 0 && (
+        <div className="row g-3 mb-4">
+          <div className="col-12">
+            <SoonPeakWidget wines={soonPeakWines} t={t} />
+          </div>
+        </div>
+      )}
 
       {/* AI Cave Analysis */}
       <div className="row g-3 mb-4">

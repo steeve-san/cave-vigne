@@ -5,7 +5,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useState, useEffect } from 'react';
-import { winesAPI } from '../services/api';
+import { winesAPI, wishlistAPI } from '../services/api';
+import toast from 'react-hot-toast';
 
 const SOURCE_ICONS = {
   Vivino:    { icon: 'bi-graph-up',      col: '#aa336a' },
@@ -14,10 +15,31 @@ const SOURCE_ICONS = {
 };
 
 export default function WineMarketModal({ wine, onClose }) {
-  const [loading,  setLoading]  = useState(true);
-  const [results,  setResults]  = useState([]);
-  const [error,    setError]    = useState(null);
-  const [query,    setQuery]    = useState('');
+  const [loading,    setLoading]    = useState(true);
+  const [results,    setResults]    = useState([]);
+  const [error,      setError]      = useState(null);
+  const [query,      setQuery]      = useState('');
+  const [addedToWL,  setAddedToWL]  = useState(new Set());
+
+  const addToWishlist = async (r) => {
+    try {
+      await wishlistAPI.create({
+        name:      wine.name,
+        producer:  wine.producer || null,
+        vintage:   wine.vintage  || null,
+        type:      wine.type     || 'rouge',
+        region:    wine.region   || null,
+        priority:  'medium',
+        price_max: r.price_avg   || null,
+        url:       r.source_url  || null,
+        notes:     `Prix de référence : ${r.price_avg ? r.price_avg.toFixed(2) + ' € (' + r.source + ')' : r.source}`,
+      });
+      setAddedToWL(s => new Set([...s, r.source]));
+      toast.success('Ajouté à la liste de souhaits !');
+    } catch {
+      toast.error('Erreur lors de l\'ajout à la wishlist');
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -148,7 +170,7 @@ export default function WineMarketModal({ wine, onClose }) {
                           </div>
                         </div>
 
-                        {/* Price + link */}
+                        {/* Price + link + wishlist */}
                         <div style={{ flexShrink: 0, textAlign: 'right' }}>
                           {r.price_avg ? (
                             <div style={{ fontSize: '1.1rem', fontFamily: 'Cormorant Garamond,serif', color: r.price_avg === lowestPrice ? '#4ade80' : 'var(--cv-gold)', fontWeight: 700 }}>
@@ -157,17 +179,30 @@ export default function WineMarketModal({ wine, onClose }) {
                           ) : (
                             <div style={{ fontSize: '0.75rem', color: 'var(--cv-text3)' }}>Prix NC</div>
                           )}
-                          {r.source_url && (
-                            <a
-                              href={r.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn btn-sm btn-outline-gold mt-1"
-                              style={{ fontSize: '0.68rem', padding: '2px 8px' }}
+                          <div className="d-flex gap-1 justify-content-end mt-1 flex-wrap">
+                            {r.source_url && (
+                              <a
+                                href={r.source_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-sm btn-outline-gold"
+                                style={{ fontSize: '0.68rem', padding: '2px 8px' }}
+                              >
+                                Voir <i className="bi bi-box-arrow-up-right ms-1" />
+                              </a>
+                            )}
+                            <button
+                              className="btn btn-sm"
+                              style={{ fontSize: '0.68rem', padding: '2px 8px',
+                                       color: addedToWL.has(r.source) ? '#4ade80' : 'var(--cv-text2)',
+                                       border: `0.5px solid ${addedToWL.has(r.source) ? '#4ade80' : 'var(--cv-border)'}`,
+                                       borderRadius: 4, background: 'none' }}
+                              onClick={() => addToWishlist(r)}
+                              title="Ajouter à la liste de souhaits"
                             >
-                              Voir <i className="bi bi-box-arrow-up-right ms-1" />
-                            </a>
-                          )}
+                              <i className={`bi bi-${addedToWL.has(r.source) ? 'heart-fill' : 'heart'}`} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );

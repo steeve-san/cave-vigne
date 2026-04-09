@@ -206,6 +206,21 @@ async function migrate() {
       INDEX idx_token (token(50))
     ) ENGINE=InnoDB;
 
+    CREATE TABLE IF NOT EXISTS pending_wines (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      sharing_id INT NOT NULL,
+      owner_id INT NOT NULL,
+      guest_id INT NOT NULL,
+      wine_data JSON NOT NULL,
+      status ENUM('pending','approved','rejected') DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (sharing_id) REFERENCES shared_caves(id) ON DELETE CASCADE,
+      FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (guest_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_owner (owner_id),
+      INDEX idx_sharing (sharing_id)
+    ) ENGINE=InnoDB;
+
     CREATE TABLE IF NOT EXISTS barcode_cache (
       id INT AUTO_INCREMENT PRIMARY KEY,
       ean VARCHAR(20) NOT NULL,
@@ -270,6 +285,8 @@ async function migrate() {
     `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS bottle_photo VARCHAR(500)`,
     `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS domain_website VARCHAR(500)`,
     `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS domain_description TEXT`,
+    // Tasting photo
+    `ALTER TABLE tasting_notes ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500)`,
   ];
   for (const sql of alters) {
     try { await conn.query(sql); } catch { /* already up to date */ }

@@ -245,4 +245,86 @@ router.put('/cave/:ownerId/wines/:id/drunk', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
+// ─── Pending wine proposals ───────────────────────────────────────────────────
+
+// GET /api/sharing/pending — owner sees pending wine proposals from guests
+router.get('/pending', auth, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT pw.*, u.username as guest_username, u.avatar_url as guest_avatar
+       FROM pending_wines pw
+       JOIN users u ON u.id = pw.guest_id
+       WHERE pw.owner_id = ? AND pw.status = 'pending'
+       ORDER BY pw.created_at DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+// POST /api/sharing/pending/:ownerId — any guest with read or write access proposes a wine
+router.post('/pending/:ownerId', auth, requireRole('user', 'admin'), async (req, res) => {
+  const ownerId = parseInt(req.params.ownerId);
+  const share = await getShareAccess(req.user.id, ownerId);
+  if (!share) return res.status(403).json({ error: 'Accès non autorisé' });
+
+  const { name, type } = req.body;
+  if (!name || !type) return res.status(400).json({ error: 'Nom et type requis' });
+
+  try {
+    const [sharing] = await db.query(
+      'SELECT id FROM shared_caves WHERE owner_id=? AND guest_id=? AND accepted=1',
+      [ownerId, req.user.id]
+    );
+    if (!sharing.length) return res.status(403).json({ error: 'Partage introuvable' });
+
+    const wineData = JSON.stringify(req.body);
+    await db.query(
+      'INSERT INTO pending_wines (sharing_id, owner_id, guest_id, wine_data) VALUES (?,?,?,?)',
+      [sharing[0].id, ownerId, req.user.id, wineData]
+    );
+    res.status(201).json({ success: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+// PUT /api/sharing/pending/:id/approve — owner approves, wine is created in their cave
+router.put('/pending/:id/approve', auth, async (req, res) => {
+  try {
+    const [[pending]] = await db.query(
+      'SELECT * FROM pending_wines WHERE id=? AND owner_id=?',
+      [req.params.id, req.user.id]
+    );
+    if (!pending) return res.status(404).json({ error: 'Proposition introuvable' });
+
+    const wineData = typeof pending.wine_data === 'string' ? JSON.parse(pending.wine_data) : pending.wine_data;
+    const { name, appellation, vintage, type, producer, region, grapes, country,
+            quantity, position, price, keep_until, notes } = wineData;
+
+    const VALID_TYPES = ['rouge','blanc','rosé','pétillant'];
+    const safeType = VALID_TYPES.includes(type) ? type : 'rouge';
+
+    const [result] = await db.query(
+      `INSERT INTO wines (user_id,name,appellation,vintage,type,producer,region,grapes,country,quantity,position,price,keep_until,notes)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [req.user.id, name, appellation||null, vintage||null, safeType, producer||null,
+       region||null, grapes||null, country||'France', parseInt(quantity)||1,
+       position||null, parseFloat(price)||null, keep_until||null, notes||null]
+    );
+    await db.query("UPDATE pending_wines SET status='approved' WHERE id=?", [req.params.id]);
+    res.json({ success: true, wine_id: result.insertId });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+// DELETE /api/sharing/pending/:id — reject (owner) or cancel (guest)
+router.delete('/pending/:id', auth, async (req, res) => {
+  try {
+    const [[pending]] = await db.query('SELECT * FROM pending_wines WHERE id=?', [req.params.id]);
+    if (!pending) return res.status(404).json({ error: 'Proposition introuvable' });
+    if (pending.owner_id !== req.user.id && pending.guest_id !== req.user.id)
+      return res.status(403).json({ error: 'Accès interdit' });
+    await db.query("UPDATE pending_wines SET status='rejected' WHERE id=?", [req.params.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
 module.exports = router;

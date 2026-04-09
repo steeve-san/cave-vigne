@@ -70,6 +70,10 @@ export const winesAPI = {
   exportCsv:    ()           => api.get('/wines/export', { responseType: 'blob' }),
   importCsv:    (file)       => { const fd = new FormData(); fd.append('file', file); return api.post('/wines/import', fd); },
   marketSearch: (id)         => api.get(`/wines/${id}/market`),
+  soonPeak:     ()           => api.get('/wines/soon-peak'),
+  qrcode:       (id)         => api.get(`/wines/${id}/qrcode`),
+  importVivino: (file)       => { const fd = new FormData(); fd.append('file', file); return api.post('/wines/import-vivino', fd); },
+  importOeni:   (file)       => { const fd = new FormData(); fd.append('file', file); return api.post('/wines/import-oeni', fd); },
 };
 
 // ─── Beers ────────────────────────────────────────────────────────────────────
@@ -105,10 +109,18 @@ export const sommelierAPI = {
 
 // ─── Tasting notes ────────────────────────────────────────────────────────────
 export const tastingAPI = {
-  list:   (wineId)       => api.get(`/tasting/${wineId}`),
-  create: (wineId, data) => api.post(`/tasting/${wineId}`, data),
-  update: (id, data)     => api.put(`/tasting/note/${id}`, data),
-  remove: (id)           => api.delete(`/tasting/note/${id}`),
+  list:   (wineId)              => api.get(`/tasting/${wineId}`),
+  create: (wineId, data, photo) => {
+    if (photo) {
+      const fd = new FormData();
+      Object.entries(data).forEach(([k, v]) => { if (v !== '' && v != null) fd.append(k, v); });
+      fd.append('photo', photo);
+      return api.post(`/tasting/${wineId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+    }
+    return api.post(`/tasting/${wineId}`, data);
+  },
+  update: (id, data)            => api.put(`/tasting/note/${id}`, data),
+  remove: (id)                  => api.delete(`/tasting/note/${id}`),
 };
 
 // ─── Wishlist ─────────────────────────────────────────────────────────────────
@@ -152,6 +164,16 @@ export const sharingAPI = {
   updateWine:     (ownerId, id, formData)  => api.put(`/sharing/cave/${ownerId}/wines/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   removeWine:     (ownerId, id)            => api.delete(`/sharing/cave/${ownerId}/wines/${id}`),
   toggleDrunk:    (ownerId, id)            => api.put(`/sharing/cave/${ownerId}/wines/${id}/drunk`),
+  // Pending wine proposals (any guest can suggest, owner approves)
+  listPending:    ()                       => api.get('/sharing/pending'),
+  submitPending:  (ownerId, data)          => api.post(`/sharing/pending/${ownerId}`, data),
+  approvePending: (id)                     => api.put(`/sharing/pending/${id}/approve`),
+  rejectPending:  (id)                     => api.delete(`/sharing/pending/${id}`),
+};
+
+// ─── Stats avancées ───────────────────────────────────────────────────────────
+export const statsAPI = {
+  advanced: () => api.get('/stats/advanced'),
 };
 
 // ─── Health ───────────────────────────────────────────────────────────────────

@@ -97,10 +97,17 @@ export default function SharedCavesPage() {
   const [acceptToken, setAcceptToken] = useState('');
   const [viewShare, setViewShare] = useState(null); // { owner_id, permission }
   const [wineModal, setWineModal] = useState(null);  // null | { mode: 'add'|'edit', wine? }
+  const [suggestModal, setSuggestModal] = useState(null); // { owner_id } | null
 
   const { data: sharing, isLoading } = useQuery({
     queryKey: ['sharing'],
     queryFn: () => sharingAPI.list().then(r => r.data),
+  });
+
+  const { data: pendingWines = [] } = useQuery({
+    queryKey: ['pending-wines'],
+    queryFn: () => sharingAPI.listPending().then(r => r.data),
+    staleTime: 30_000,
   });
 
   const { data: sharedCave, isLoading: caveLoading } = useQuery({
@@ -165,6 +172,24 @@ export default function SharedCavesPage() {
     mutationFn: (id) => sharingAPI.toggleDrunk(viewShare.owner_id, id),
     onSuccess: () => qc.invalidateQueries(['shared-cave', viewShare.owner_id]),
     onError: () => toast.error(t('common.error')),
+  });
+
+  const approvePendingMut = useMutation({
+    mutationFn: (id) => sharingAPI.approvePending(id),
+    onSuccess: () => { qc.invalidateQueries(['pending-wines']); toast.success(t('sharing.approved')); },
+    onError: () => toast.error(t('common.error')),
+  });
+
+  const rejectPendingMut = useMutation({
+    mutationFn: (id) => sharingAPI.rejectPending(id),
+    onSuccess: () => { qc.invalidateQueries(['pending-wines']); toast.success(t('sharing.rejected')); },
+    onError: () => toast.error(t('common.error')),
+  });
+
+  const submitPendingMut = useMutation({
+    mutationFn: ({ ownerId, data }) => sharingAPI.submitPending(ownerId, data),
+    onSuccess: () => { setSuggestModal(null); toast.success(t('sharing.suggestSent')); },
+    onError: () => toast.error(t('sharing.suggestError')),
   });
 
   // ── Handlers ──
@@ -357,6 +382,10 @@ export default function SharedCavesPage() {
                       <i className="bi bi-plus me-1"></i>{t('wines.add')}
                     </button>
                   )}
+                  <button className="btn btn-sm btn-outline-gold" style={{ fontSize: '0.78rem' }}
+                    onClick={() => setSuggestModal({ owner_id: viewShare.owner_id })}>
+                    <i className="bi bi-lightbulb me-1"></i>{t('sharing.suggestWine')}
+                  </button>
                 </div>
                 <button className="btn btn-sm" style={{ background: 'none', border: 'none', color: 'var(--cv-text3)' }}
                   onClick={() => { setViewShare(null); setWineModal(null); }}>
@@ -427,6 +456,66 @@ export default function SharedCavesPage() {
         )}
       </div>
 
+      {/* ── Pending wine proposals (owner view) ────────────────────────── */}
+      {pendingWines.length > 0 && (
+        <div className="row g-3 mt-2">
+          <div className="col-12 fade-in">
+            <div className="card">
+              <div className="card-header">
+                <h6 className="card-title mb-0">
+                  <i className="bi bi-hourglass-split me-2" style={{ color: 'var(--cv-gold)' }}></i>
+                  {t('sharing.pendingWines')}
+                  <span style={{ marginLeft: 8, fontSize: '0.72rem', padding: '2px 8px', borderRadius: 10,
+                                  background: 'rgba(201,168,76,0.15)', color: 'var(--cv-gold)' }}>
+                    {pendingWines.length}
+                  </span>
+                </h6>
+              </div>
+              <div className="card-body p-3">
+                <p style={{ fontSize: '0.78rem', color: 'var(--cv-text3)', marginBottom: 12 }}>{t('sharing.pendingHint')}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {pendingWines.map(p => {
+                    const w = typeof p.wine_data === 'string' ? JSON.parse(p.wine_data) : p.wine_data;
+                    return (
+                      <div key={p.id} style={{ background: 'var(--cv-bg3)', borderRadius: 8, padding: '10px 14px',
+                                               border: '1px solid var(--cv-border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontFamily: 'Cormorant Garamond,serif', fontSize: '0.92rem', color: 'var(--cv-text)' }}>
+                            {w.name}{w.vintage ? ` ${w.vintage}` : ''}
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginTop: 2 }}>
+                            {[w.appellation, w.region, w.type].filter(Boolean).join(' · ')}
+                          </div>
+                          {p.guest_username && (
+                            <div style={{ fontSize: '0.68rem', color: 'var(--cv-text3)', marginTop: 2 }}>
+                              {t('sharing.proposedBy')} {p.guest_username}
+                            </div>
+                          )}
+                        </div>
+                        <div className="d-flex gap-2 flex-shrink-0">
+                          <button className="btn btn-sm btn-gold"
+                            style={{ fontSize: '0.72rem', padding: '3px 10px' }}
+                            disabled={approvePendingMut.isPending}
+                            onClick={() => approvePendingMut.mutate(p.id)}>
+                            <i className="bi bi-check-lg me-1"></i>{t('sharing.approve')}
+                          </button>
+                          <button className="btn btn-sm"
+                            style={{ fontSize: '0.72rem', padding: '3px 10px', color: '#dc3545', border: '0.5px solid #dc3545', borderRadius: 4, background: 'none' }}
+                            disabled={rejectPendingMut.isPending}
+                            onClick={() => rejectPendingMut.mutate(p.id)}>
+                            <i className="bi bi-x-lg me-1"></i>{t('sharing.reject')}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Wine modal for shared cave write ops */}
       {wineModal?.mode === 'add' && (
         <SharedWineModal
@@ -443,6 +532,78 @@ export default function SharedCavesPage() {
           onSave={(fd) => editWineMut.mutateAsync({ id: wineModal.wine.id, fd })}
         />
       )}
+
+      {/* Suggest wine modal */}
+      {suggestModal && (
+        <SuggestWineModal
+          ownerId={suggestModal.owner_id}
+          onClose={() => setSuggestModal(null)}
+          onSubmit={(ownerId, data) => submitPendingMut.mutateAsync({ ownerId, data })}
+          t={t}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Suggest wine modal ────────────────────────────────────────────────────────
+function SuggestWineModal({ ownerId, onClose, onSubmit, t }) {
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [loading, setLoading] = useState(false);
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const data = Object.fromEntries(Object.entries(form).filter(([, v]) => v !== '' && v !== null && v !== undefined));
+      await onSubmit(ownerId, data);
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="modal show d-block" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title">
+              <i className="bi bi-lightbulb me-2" style={{ color: 'var(--cv-gold)' }}></i>
+              {t('sharing.suggestTitle')}
+            </h5>
+            <button className="btn-close" onClick={onClose} />
+          </div>
+          <form onSubmit={handleSubmit}>
+            <div className="modal-body">
+              <div className="alert alert-warning py-2" style={{ fontSize: '0.78rem' }}>
+                <i className="bi bi-info-circle me-1"></i>{t('sharing.suggestHint')}
+              </div>
+              <div className="row g-3">
+                <div className="col-md-8"><label className="form-label">{t('wines.name')} *</label><input className="form-control" required value={form.name} onChange={set('name')} /></div>
+                <div className="col-md-4"><label className="form-label">{t('wines.vintage')}</label><input className="form-control" type="number" value={form.vintage} onChange={set('vintage')} min="1900" max="2030" /></div>
+                <div className="col-md-6"><label className="form-label">{t('wines.appellation')}</label><input className="form-control" value={form.appellation} onChange={set('appellation')} /></div>
+                <div className="col-md-6"><label className="form-label">{t('wines.type')} *</label>
+                  <select className="form-select" value={form.type} onChange={set('type')}>
+                    {TYPES.map(tp => <option key={tp} value={tp}>{t(`wines.type.${tp}`)}</option>)}
+                  </select>
+                </div>
+                <div className="col-md-6"><label className="form-label">{t('wines.producer')}</label><input className="form-control" value={form.producer} onChange={set('producer')} /></div>
+                <div className="col-md-6"><label className="form-label">{t('wines.region')}</label><input className="form-control" value={form.region} onChange={set('region')} /></div>
+                <div className="col-md-4"><label className="form-label">{t('wines.quantity')}</label><input className="form-control" type="number" min="1" value={form.quantity} onChange={set('quantity')} /></div>
+                <div className="col-md-4"><label className="form-label">{t('wines.price')}</label><input className="form-control" type="number" min="0" step="0.01" value={form.price} onChange={set('price')} /></div>
+                <div className="col-md-4"><label className="form-label">{t('wines.keepUntil')}</label><input className="form-control" type="number" min="2024" max="2100" value={form.keep_until} onChange={set('keep_until')} /></div>
+                <div className="col-12"><label className="form-label">{t('wines.notes')}</label><textarea className="form-control" rows={2} value={form.notes} onChange={set('notes')} /></div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-outline-gold" onClick={onClose}>{t('common.cancel')}</button>
+              <button type="submit" className="btn btn-gold" disabled={loading}>
+                {loading ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-send me-1"></i>}
+                {t('sharing.suggestWine')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

@@ -346,7 +346,7 @@ Laisse un champ null si tu n'es pas certain. Ne retourne QUE le JSON.`;
 
 // ─── GET /api/wines/barcode/:ean ──────────────────────────────────────────────
 // Lookup chain: 1) local barcode_cache  2) Open Food Facts API  3) web scrapers
-const { scrapeWineByEan, scrapeWineByName } = require('../services/wineScraper');
+const { scrapeWineByEan, scrapeWineByName, vivinoSearch } = require('../services/wineScraper');
 
 router.get('/barcode/:ean', auth, async (req, res) => {
   const { ean } = req.params;
@@ -436,7 +436,6 @@ router.get('/value-history', auth, async (req, res) => {
 
 // ─── GET /api/wines/:id/enrich — enrichissement multi-sources ────────────────
 // Sources: Vivino API → Open Food Facts → Vinatis scraper → La Revue du Vin de France
-const { scrapeWineByName, vivinoSearch } = require('../services/wineScraper');
 const cheerio = require('cheerio');
 
 async function scrapeVinatis(query) {
@@ -648,6 +647,163 @@ router.get('/:id/market', auth, requireRole('user', 'admin'), async (req, res) =
     console.error('[market]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
   }
+});
+
+// ─── GET /api/wines/soon-peak — vins proches de l'apogée (keep_until dans 0-2 ans) ──
+router.get('/soon-peak', auth, async (req, res) => {
+  try {
+    const currentYear = new Date().getFullYear();
+    const [rows] = await db.query(
+      `SELECT id, name, vintage, type, appellation, region, producer, grapes,
+              quantity, price, keep_until, notes, label_image
+       FROM wines
+       WHERE user_id = ?
+         AND is_drunk = 0
+         AND quantity > 0
+         AND keep_until IS NOT NULL
+         AND keep_until BETWEEN ? AND ?
+       ORDER BY keep_until ASC
+       LIMIT 20`,
+      [req.user.id, currentYear, currentYear + 2]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+// ─── GET /api/wines/:id/qrcode — QR code de la bouteille ─────────────────────
+const QRCode = require('qrcode');
+router.get('/:id/qrcode', auth, async (req, res) => {
+  try {
+    const [wines] = await db.query(
+      'SELECT id, name, vintage, producer FROM wines WHERE id=? AND user_id=?',
+      [req.params.id, req.user.id]
+    );
+    if (!wines.length) return res.status(404).json({ error: 'Vin introuvable' });
+    const w = wines[0];
+    const baseUrl = process.env.APP_URL || req.headers.origin || 'http://localhost:3000';
+    const url = `${baseUrl}/wines/${w.id}`;
+    const dataUrl = await QRCode.toDataURL(url, {
+      width: 280, margin: 2,
+      color: { dark: '#1a0f0f', light: '#f0e6d3' },
+      errorCorrectionLevel: 'M',
+    });
+    res.json({ dataUrl, url, name: w.name, vintage: w.vintage });
+  } catch (err) { res.status(500).json({ error: 'Erreur génération QR' }); }
+});
+
+// ─── POST /api/wines/import-vivino — importer cave Vivino (CSV) ───────────────
+const uploadFile = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10485760 } });
+
+router.post('/import-vivino', auth, requireRole('user','admin'), uploadFile.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Fichier CSV requis' });
+  try {
+    const text = req.file.buffer.toString('utf-8').replace(/^\uFEFF/, '');
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return res.status(400).json({ error: 'Fichier vide ou invalide' });
+
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+    const findCol = (...names) => headers.findIndex(h => names.some(n => h.includes(n)));
+    const nameIdx    = findCol('wine name', 'wine_name', 'name');
+    const wineryIdx  = findCol('winery', 'producer', 'domaine');
+    const vintageIdx = findCol('vintage', 'millesime', 'year');
+    const qtyIdx     = findCol('quantity', 'quantité', 'qty');
+    const priceIdx   = findCol('price', 'prix');
+    const notesIdx   = findCol('note', 'notes', 'commentaire');
+    const locationIdx= findCol('location', 'region', 'région', 'appellation');
+
+    if (nameIdx === -1) return res.status(400).json({ error: 'Colonne "Wine Name" introuvable. Format CSV Vivino attendu.' });
+
+    const VALID_TYPES = ['rouge','blanc','rosé','pétillant'];
+    let inserted = 0, skipped = 0;
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].match(/("(?:[^"]|"")*"|[^,]*)/g)
+        ?.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"').trim()) || [];
+      const get = idx => (idx >= 0 && parts[idx] != null) ? parts[idx].trim() : '';
+
+      const name = get(nameIdx);
+      if (!name) { skipped++; continue; }
+
+      const vintageStr = get(vintageIdx);
+      const vintage = /^\d{4}$/.test(vintageStr) ? parseInt(vintageStr) : null;
+      const qty     = parseInt(get(qtyIdx)) || 1;
+      const price   = parseFloat(get(priceIdx)) || null;
+
+      const nameLc = name.toLowerCase();
+      let type = 'rouge';
+      if (nameLc.includes('blanc') || nameLc.includes('white') || nameLc.includes('chardonnay') || nameLc.includes('sauvignon') || nameLc.includes('riesling')) type = 'blanc';
+      else if (nameLc.includes('rosé') || nameLc.includes('rose')) type = 'rosé';
+      else if (nameLc.includes('champagne') || nameLc.includes('crémant') || nameLc.includes('prosecco') || nameLc.includes('sparkling') || nameLc.includes('cava')) type = 'pétillant';
+
+      await db.query(
+        `INSERT INTO wines (user_id, name, vintage, type, producer, region, quantity, price, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [req.user.id, name, vintage, type, get(wineryIdx)||null, get(locationIdx)||null, qty, price, get(notesIdx)||null]
+      );
+      inserted++;
+    }
+
+    await cacheDel(`wines:${req.user.id}:*`);
+    await cacheDel('wines:all:*');
+    res.json({ inserted, skipped, message: `${inserted} vin(s) importé(s) depuis Vivino` });
+  } catch (err) { console.error('[import-vivino]', err); res.status(500).json({ error: 'Erreur import Vivino' }); }
+});
+
+// ─── POST /api/wines/import-oeni — importer cave Oeni (JSON ou CSV) ───────────
+router.post('/import-oeni', auth, requireRole('user','admin'), uploadFile.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Fichier requis (JSON ou CSV)' });
+  try {
+    const text = req.file.buffer.toString('utf-8').replace(/^\uFEFF/, '');
+    const filename = (req.file.originalname || '').toLowerCase();
+    const VALID_TYPES = ['rouge','blanc','rosé','pétillant'];
+    let wines = [];
+
+    if (filename.endsWith('.json')) {
+      const data = JSON.parse(text);
+      wines = Array.isArray(data) ? data : (data.wines || data.cellar || data.bottles || []);
+    } else {
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) return res.status(400).json({ error: 'Fichier CSV vide' });
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].match(/("(?:[^"]|"")*"|[^,]*)/g)?.map(v => v.replace(/^"|"$/g, '').trim()) || [];
+        const row = {};
+        headers.forEach((h, idx) => { row[h] = parts[idx] || ''; });
+        wines.push(row);
+      }
+    }
+
+    let inserted = 0, skipped = 0;
+    for (const w of wines) {
+      const name = w.name || w['wine name'] || w.wine_name || w.titre || '';
+      if (!name) { skipped++; continue; }
+      const vintageRaw = w.vintage || w.year || w.millesime || w.annee;
+      const vintage = /^\d{4}$/.test(String(vintageRaw)) ? parseInt(vintageRaw) : null;
+      const typeRaw = (w.type || w.color || w.couleur || '').toLowerCase();
+      let type = 'rouge';
+      if (typeRaw.includes('blanc') || typeRaw.includes('white')) type = 'blanc';
+      else if (typeRaw.includes('rosé') || typeRaw.includes('rose')) type = 'rosé';
+      else if (typeRaw.includes('sparkling') || typeRaw.includes('pétillant') || typeRaw.includes('champagne')) type = 'pétillant';
+      else if (VALID_TYPES.includes(typeRaw)) type = typeRaw;
+
+      await db.query(
+        `INSERT INTO wines (user_id, name, vintage, type, producer, region, country, grapes, quantity, price, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [req.user.id, name, vintage, type,
+         w.producer || w.winery || w.domaine || w.producteur || null,
+         w.region || w.appellation || w.appelhation || null,
+         w.country || w.pays || 'France',
+         w.grapes || w.cepages || w.grape || null,
+         parseInt(w.quantity || w.quantite || w.qty || w.nb) || 1,
+         parseFloat(w.price || w.prix) || null,
+         w.notes || w.note || w.comment || null]
+      );
+      inserted++;
+    }
+
+    await cacheDel(`wines:${req.user.id}:*`);
+    await cacheDel('wines:all:*');
+    res.json({ inserted, skipped, message: `${inserted} vin(s) importé(s) depuis Oeni` });
+  } catch (err) { console.error('[import-oeni]', err); res.status(500).json({ error: 'Erreur import Oeni' }); }
 });
 
 module.exports = router;

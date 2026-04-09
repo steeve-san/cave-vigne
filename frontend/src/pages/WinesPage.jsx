@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import BarcodeScannerModal from '../components/BarcodeScannerModal';
 import LabelPrinter from '../components/LabelPrinter';
 import WineMarketModal from '../components/WineMarketModal';
+import QRCodeModal from '../components/QRCodeModal';
 
 // Print-to-PDF: open a print window with a styled sheet of all visible wines
 function printWinesPDF(wines) {
@@ -99,6 +100,7 @@ function WineModal({ wine, prefill, onClose, onSave }) {
   const [aiEnrichData, setAiEnrichData] = useState(null);
   const [aiEnrichSelected, setAiEnrichSelected] = useState({});
   const [newTasting, setNewTasting] = useState({ tasted_at: new Date().toISOString().slice(0,10), rating: '', color_desc: '', nose: '', palate: '', finish: '', overall: '' });
+  const [tastingPhoto, setTastingPhoto] = useState(null);
   const [savingTasting, setSavingTasting] = useState(false);
   const qcInner = useQueryClient();
   const { data: tastingNotes = [] } = useQuery({
@@ -335,6 +337,13 @@ function WineModal({ wine, prefill, onClose, onSave }) {
                                 <i className="bi bi-x"></i>
                               </button>
                             </div>
+                            {note.photo_url && (() => {
+                              const API_BASE = import.meta.env.REACT_APP_API_URL?.replace('/api', '') || '';
+                              return (
+                                <img src={`${API_BASE}${note.photo_url}`} alt="photo dégustation"
+                                  style={{ width: '100%', maxHeight: 140, objectFit: 'cover', borderRadius: 6, marginBottom: 8 }} />
+                              );
+                            })()}
                             {note.color_desc && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>Robe:</strong> {note.color_desc}</div>}
                             {note.nose && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>Nez:</strong> {note.nose}</div>}
                             {note.palate && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>Bouche:</strong> {note.palate}</div>}
@@ -385,13 +394,28 @@ function WineModal({ wine, prefill, onClose, onSave }) {
                           onChange={e => setNewTasting(f => ({ ...f, overall: e.target.value }))} placeholder="Impressions générales, accord suggéré…" />
                       </div>
                       <div className="col-12">
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Photo de dégustation</label>
+                        <div className="d-flex align-items-center gap-2">
+                          <label className="btn btn-sm btn-outline-gold" style={{ cursor: 'pointer', marginBottom: 0 }}>
+                            <i className="bi bi-camera me-1"></i>{tastingPhoto ? tastingPhoto.name : 'Choisir une photo'}
+                            <input type="file" accept="image/*" style={{ display: 'none' }}
+                              onChange={e => setTastingPhoto(e.target.files[0] || null)} />
+                          </label>
+                          {tastingPhoto && (
+                            <button type="button" className="btn btn-sm btn-outline-secondary"
+                              onClick={() => setTastingPhoto(null)}>✕</button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="col-12">
                         <button type="button" className="btn btn-sm btn-outline-gold" disabled={savingTasting || !newTasting.tasted_at}
                           onClick={async () => {
                             setSavingTasting(true);
                             try {
-                              await tastingAPI.create(wine.id, newTasting);
+                              await tastingAPI.create(wine.id, newTasting, tastingPhoto || undefined);
                               qcInner.invalidateQueries(['tasting', wine.id]);
                               setNewTasting({ tasted_at: new Date().toISOString().slice(0,10), rating: '', color_desc: '', nose: '', palate: '', finish: '', overall: '' });
+                              setTastingPhoto(null);
                               toast.success('Note ajoutée !');
                             } catch { toast.error('Erreur'); }
                             finally { setSavingTasting(false); }
@@ -470,6 +494,8 @@ export default function WinesPage() {
   const [bulkMode, setBulkMode] = useState(false);
   const [pendingBarcode, setPendingBarcode] = useState(null); // pre-filled form from barcode scan
   const importRef = useRef();
+  const importVivinoRef = useRef();
+  const importOeniRef = useRef();
 
   const params = { search: search || undefined, type: typeF !== 'all' ? typeF : undefined, status: statusF !== 'all' ? statusF : undefined, limit: 100 };
   const { data, isLoading } = useQuery({ queryKey: ['wines', params], queryFn: () => winesAPI.list(params).then(r => r.data) });
@@ -499,6 +525,26 @@ export default function WinesPage() {
       qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']);
       toast.success(`${r.data.inserted} vin(s) importé(s)${r.data.skipped ? `, ${r.data.skipped} ignoré(s)` : ''}`);
     } catch (err) { toast.error(err.response?.data?.error || 'Erreur import'); }
+    e.target.value = '';
+  };
+
+  const handleImportVivino = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    try {
+      const r = await winesAPI.importVivino(file);
+      qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']);
+      toast.success(r.data.message || `${r.data.inserted} vin(s) importé(s) depuis Vivino`);
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur import Vivino'); }
+    e.target.value = '';
+  };
+
+  const handleImportOeni = async (e) => {
+    const file = e.target.files[0]; if (!file) return;
+    try {
+      const r = await winesAPI.importOeni(file);
+      qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']);
+      toast.success(r.data.message || `${r.data.inserted} vin(s) importé(s) depuis Oeni`);
+    } catch (err) { toast.error(err.response?.data?.error || 'Erreur import Oeni'); }
     e.target.value = '';
   };
 
@@ -570,9 +616,14 @@ export default function WinesPage() {
               <ul className="dropdown-menu dropdown-menu-end">
                 <li><button className="dropdown-item" onClick={handleExport}><i className="bi bi-download me-2"></i>Exporter (.csv)</button></li>
                 <li><button className="dropdown-item" onClick={() => importRef.current?.click()}><i className="bi bi-upload me-2"></i>Importer (.csv)</button></li>
+                <li><hr className="dropdown-divider" style={{ borderColor: 'var(--cv-border)' }} /></li>
+                <li><button className="dropdown-item" onClick={() => importVivinoRef.current?.click()}><i className="bi bi-wine-glass me-2"></i>Importer depuis Vivino</button></li>
+                <li><button className="dropdown-item" onClick={() => importOeniRef.current?.click()}><i className="bi bi-phone me-2"></i>Importer depuis Oeni</button></li>
               </ul>
             </div>
             <input ref={importRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImport} />
+      <input ref={importVivinoRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImportVivino} />
+      <input ref={importOeniRef} type="file" accept=".csv,.json" style={{ display: 'none' }} onChange={handleImportOeni} />
             <button className={`btn btn-sm ${bulkMode ? 'btn-gold' : 'btn-outline-gold'}`} onClick={() => { setBulkMode(v => !v); setSelected(new Set()); }} title="Sélection multiple">
               <i className="bi bi-check2-square"></i>
             </button>
@@ -652,6 +703,7 @@ export default function WinesPage() {
                         {w.is_drunk ? 'Remettre en stock' : 'Marquer comme bue'}
                       </button></li>
                       <li><button className="dropdown-item" onClick={() => setModal({ mode: 'label', wine: w })}><i className="bi bi-tag me-2"></i>Imprimer étiquette</button></li>
+                      <li><button className="dropdown-item" onClick={() => setModal({ mode: 'qr', wine: w })}><i className="bi bi-qr-code me-2"></i>QR Code bouteille</button></li>
                       <li><button className="dropdown-item" onClick={() => setModal({ mode: 'market', wine: w })}><i className="bi bi-cart-check me-2"></i>Rechercher à racheter</button></li>
                       <li><hr className="dropdown-divider" style={{ borderColor: 'var(--cv-border)' }} /></li>
                       <li><button className="dropdown-item" style={{ color: '#dc3545' }} onClick={() => { if (window.confirm('Supprimer ce vin ?')) delMutation.mutate(w.id); }}>
@@ -683,6 +735,9 @@ export default function WinesPage() {
       )}
       {modal?.mode === 'market' && (
         <WineMarketModal wine={modal.wine} onClose={() => setModal(null)} />
+      )}
+      {modal?.mode === 'qr' && (
+        <QRCodeModal wine={modal.wine} onClose={() => setModal(null)} />
       )}
     </div>
   );
