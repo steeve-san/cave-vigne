@@ -69,6 +69,7 @@ export const winesAPI = {
   valueHistory: ()           => api.get('/wines/value-history'),
   exportCsv:    ()           => api.get('/wines/export', { responseType: 'blob' }),
   importCsv:    (file)       => { const fd = new FormData(); fd.append('file', file); return api.post('/wines/import', fd); },
+  marketSearch: (id)         => api.get(`/wines/${id}/market`),
 };
 
 // ─── Beers ────────────────────────────────────────────────────────────────────

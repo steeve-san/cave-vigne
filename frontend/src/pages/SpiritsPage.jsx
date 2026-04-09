@@ -5,6 +5,7 @@ import { spiritsAPI } from '../services/api';
 import { useLang } from '../context/LangContext';
 import toast from 'react-hot-toast';
 import BarcodeScannerModal from '../components/BarcodeScannerModal';
+import LabelPrinter from '../components/LabelPrinter';
 
 const SPIRIT_TYPES = ['whisky','rhum','cognac','armagnac','calvados','gin','vodka','autre'];
 const TYPE_ICONS = { whisky:'🥃', rhum:'🍹', cognac:'🥃', armagnac:'🥃', calvados:'🍎', gin:'🍸', vodka:'🍸', autre:'🍶' };
@@ -261,6 +262,7 @@ export default function SpiritsPage() {
                           <i className={`bi bi-${s.status === 'open' ? 'lock' : 'unlock'} me-2`}></i>{s.status === 'open' ? 'Marquer fermé' : 'Marquer ouvert'}
                         </button></li>
                         <li><hr className="dropdown-divider" style={{ borderColor:'var(--cv-border)' }} /></li>
+                        <li><button className="dropdown-item" onClick={() => setModal({ mode:'label', spirit:s })}><i className="bi bi-tag me-2"></i>Imprimer étiquette</button></li>
                         <li><button className="dropdown-item" style={{ color:'#dc3545' }} onClick={() => { if (window.confirm('Supprimer ?')) delM.mutate(s.id); }}>
                           <i className="bi bi-trash me-2"></i>Supprimer
                         </button></li>
@@ -282,6 +284,9 @@ export default function SpiritsPage() {
           onClose={() => setModal(null)}
           onResult={(data) => handleBarcodeResult(data)}
         />
+      )}
+      {modal?.mode === 'label' && (
+        <LabelPrinter item={modal.spirit} itemType="spirit" onClose={() => setModal(null)} />
       )}
     </div>
   );

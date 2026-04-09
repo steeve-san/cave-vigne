@@ -8,7 +8,7 @@
 // • Lookup via prop `lookupFn(ean)` → résultat renvoyé à `onResult(data)`
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 // ── Normalise un code-barres (carton ITF-14 → bouteille EAN-13) ───────────────
 function normalizeEan(raw) {
@@ -23,6 +23,12 @@ const hasBarcodeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in
 
 export default function BarcodeScannerModal({ onClose, onResult, lookupFn, title = 'Scanner un code-barres' }) {
   const [mode, setMode] = useState(hasBarcodeDetector ? 'camera' : 'manual');
+  // ── Douchette (physical scanner) state ───────────────────────────────────
+  const [douchetteInput, setDouchetteInput]     = useState('');
+  const [douchetteStatus, setDouchetteStatus]   = useState('idle'); // idle | scanning | found | error
+  const [douchetteHistory, setDouchetteHistory] = useState([]); // [{ean, name, ts}]
+  const douchetteRef  = useRef(null);
+  const douchetteTimer = useRef(null);
   const [ean, setEan] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -123,8 +129,9 @@ export default function BarcodeScannerModal({ onClose, onResult, lookupFn, title
     setError('');
     try {
       const r = await lookupFn(finalCode);
-      onResult(r.data, finalCode);
+      // Close scanner first so the parent can open the add-modal without collision
       onClose();
+      onResult(r.data, finalCode);
     } catch (err) {
       setError(err.response?.data?.error || 'Produit introuvable — essayez un autre code ou saisissez manuellement.');
       if (mode === 'camera') {
@@ -139,8 +146,57 @@ export default function BarcodeScannerModal({ onClose, onResult, lookupFn, title
   const handleManualSubmit = () => handleLookup(null);
   const handleKeyDown = e => { if (e.key === 'Enter') handleManualSubmit(); };
 
-  const switchToManual = () => { stopCamera(); setMode('manual'); setCameraError(''); setError(''); };
-  const switchToCamera = () => { setMode('camera'); setError(''); };
+  const switchToManual    = () => { stopCamera(); setMode('manual');    setCameraError(''); setError(''); };
+  const switchToCamera    = () => { setMode('camera');    setError(''); };
+  const switchToDouchette = () => { stopCamera(); setMode('douchette'); setError(''); };
+
+  // ── Douchette: auto-focus input when tab opens ────────────────────────────
+  useEffect(() => {
+    if (mode === 'douchette') {
+      setTimeout(() => douchetteRef.current?.focus(), 50);
+    }
+  }, [mode]);
+
+  // ── Douchette: handle scan input ──────────────────────────────────────────
+  const handleDouchetteChange = useCallback(e => {
+    const val = e.target.value.replace(/\D/g, '');
+    setDouchetteInput(val);
+    setDouchetteStatus('idle');
+    clearTimeout(douchetteTimer.current);
+    // Auto-trigger after EAN-13 length (13 digits) without needing Enter
+    if (val.length >= 13) {
+      douchetteTimer.current = setTimeout(() => handleDouchetteScan(val), 80);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDouchetteScan = useCallback(async (code) => {
+    const normalized = normalizeEan(code || douchetteInput);
+    if (!/^\d{8,13}$/.test(normalized)) return;
+    setDouchetteStatus('scanning');
+    setError('');
+    try {
+      const r = await lookupFn(normalized);
+      const name = r.data?.name || normalized;
+      setDouchetteHistory(h => [{ ean: normalized, name, ts: Date.now() }, ...h.slice(0, 9)]);
+      setDouchetteStatus('found');
+      setDouchetteInput('');
+      // Close scanner first, then pass result to parent
+      onClose();
+      onResult(r.data, normalized);
+    } catch (err) {
+      setDouchetteStatus('error');
+      setError(err.response?.data?.error || 'Produit introuvable');
+      setDouchetteInput('');
+      setTimeout(() => { douchetteRef.current?.focus(); setDouchetteStatus('idle'); }, 1500);
+    }
+  }, [douchetteInput, lookupFn, onResult, onClose]);
+
+  const handleDouchetteKeyDown = e => {
+    if (e.key === 'Enter') {
+      clearTimeout(douchetteTimer.current);
+      handleDouchetteScan(douchetteInput);
+    }
+  };
 
   return (
     <div
@@ -163,25 +219,27 @@ export default function BarcodeScannerModal({ onClose, onResult, lookupFn, title
           <div className="modal-body p-0">
 
             {/* Mode tabs */}
-            {hasBarcodeDetector && (
-              <div style={{ display: 'flex', borderBottom: '1px solid var(--cv-border)' }}>
-                {[['camera', 'bi-camera-video', 'Caméra'], ['manual', 'bi-keyboard', 'Saisie manuelle']].map(([m, icon, label]) => (
-                  <button
-                    key={m}
-                    onClick={() => m === 'camera' ? switchToCamera() : switchToManual()}
-                    style={{
-                      flex: 1, background: 'none', border: 'none',
-                      padding: '10px 0', cursor: 'pointer', fontSize: '0.83rem',
-                      color: mode === m ? 'var(--cv-gold)' : 'var(--cv-text2)',
-                      borderBottom: mode === m ? '2px solid var(--cv-gold)' : '2px solid transparent',
-                      fontWeight: mode === m ? 600 : 400,
-                    }}
-                  >
-                    <i className={`bi ${icon} me-1`} />{label}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--cv-border)' }}>
+              {[
+                ...(hasBarcodeDetector ? [['camera', 'bi-camera-video', 'Caméra']] : []),
+                ['manual',    'bi-keyboard',  'Manuel'],
+                ['douchette', 'bi-wifi',       'Douchette'],
+              ].map(([m, icon, label]) => (
+                <button
+                  key={m}
+                  onClick={() => m === 'camera' ? switchToCamera() : m === 'douchette' ? switchToDouchette() : switchToManual()}
+                  style={{
+                    flex: 1, background: 'none', border: 'none',
+                    padding: '10px 0', cursor: 'pointer', fontSize: '0.83rem',
+                    color: mode === m ? 'var(--cv-gold)' : 'var(--cv-text2)',
+                    borderBottom: mode === m ? '2px solid var(--cv-gold)' : '2px solid transparent',
+                    fontWeight: mode === m ? 600 : 400,
+                  }}
+                >
+                  <i className={`bi ${icon} me-1`} />{label}
+                </button>
+              ))}
+            </div>
 
             {/* ── Vue caméra ── */}
             {mode === 'camera' && (
@@ -269,6 +327,95 @@ export default function BarcodeScannerModal({ onClose, onResult, lookupFn, title
                   <div style={{ fontSize: '0.75rem', color: 'var(--cv-gold)', marginTop: 4 }}>
                     <i className="bi bi-box me-1" />
                     Code carton (ITF-14) détecté — sera converti en EAN-13 automatiquement
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Mode douchette ── */}
+            {mode === 'douchette' && (
+              <div className="p-3">
+                {/* Status banner */}
+                <div style={{
+                  textAlign: 'center', padding: '18px 12px', marginBottom: 16,
+                  background: douchetteStatus === 'found'    ? 'rgba(74,222,128,0.12)'
+                            : douchetteStatus === 'error'   ? 'rgba(248,113,113,0.12)'
+                            : douchetteStatus === 'scanning' ? 'rgba(201,168,76,0.12)'
+                            : 'rgba(0,0,0,0.2)',
+                  borderRadius: 8,
+                  border: `1px solid ${
+                    douchetteStatus === 'found'    ? 'rgba(74,222,128,0.35)'
+                  : douchetteStatus === 'error'   ? 'rgba(248,113,113,0.35)'
+                  : douchetteStatus === 'scanning' ? 'rgba(201,168,76,0.35)'
+                  : 'var(--cv-border)'}`,
+                  transition: 'all 0.25s',
+                }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: 6 }}>
+                    {douchetteStatus === 'found'    ? '✅'
+                   : douchetteStatus === 'error'   ? '❌'
+                   : douchetteStatus === 'scanning' ? '🔍'
+                   : '📡'}
+                  </div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color:
+                    douchetteStatus === 'found'    ? '#4ade80'
+                  : douchetteStatus === 'error'   ? '#f87171'
+                  : douchetteStatus === 'scanning' ? 'var(--cv-gold)'
+                  : 'var(--cv-text2)' }}>
+                    {douchetteStatus === 'found'    ? 'Produit trouvé !'
+                   : douchetteStatus === 'error'   ? 'Produit introuvable'
+                   : douchetteStatus === 'scanning' ? 'Recherche en cours…'
+                   : 'Prêt — pointez et scannez'}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--cv-text3)', marginTop: 4 }}>
+                    Connectez votre douchette USB / Bluetooth et scannez directement
+                  </div>
+                </div>
+
+                {/* Champ de capture douchette */}
+                <div className="input-group mb-2">
+                  <span className="input-group-text" style={{ background: 'var(--cv-bg3)', borderColor: 'var(--cv-border)' }}>
+                    <i className="bi bi-upc" style={{ color: 'var(--cv-gold)' }} />
+                  </span>
+                  <input
+                    ref={douchetteRef}
+                    className="form-control"
+                    style={{ fontFamily: 'monospace', letterSpacing: 2, fontSize: '1.1rem', textAlign: 'center' }}
+                    placeholder="EAN capturé ici…"
+                    value={douchetteInput}
+                    onChange={handleDouchetteChange}
+                    onKeyDown={handleDouchetteKeyDown}
+                    type="tel"
+                    inputMode="numeric"
+                    disabled={douchetteStatus === 'scanning'}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    className="btn btn-outline-gold"
+                    onClick={() => handleDouchetteScan(douchetteInput)}
+                    disabled={!douchetteInput || douchetteStatus === 'scanning'}
+                    title="Valider"
+                  >
+                    <i className="bi bi-search" />
+                  </button>
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', textAlign: 'center' }}>
+                  Cliquez dans le champ ci-dessus si la douchette ne capture pas · EAN-13 auto-détecté
+                </div>
+
+                {/* Historique */}
+                {douchetteHistory.length > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>
+                      <i className="bi bi-clock-history me-1" />Derniers scans
+                    </div>
+                    {douchetteHistory.map((h, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '0.5px solid var(--cv-border)', fontSize: '0.8rem' }}>
+                        <span style={{ fontFamily: 'monospace', color: 'var(--cv-text3)' }}>{h.ean}</span>
+                        <span style={{ color: 'var(--cv-text2)', flex: 1, textAlign: 'right', paddingLeft: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

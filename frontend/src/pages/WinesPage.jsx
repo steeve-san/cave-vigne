@@ -5,6 +5,8 @@ import { winesAPI, tastingAPI } from '../services/api';
 import { useLang } from '../context/LangContext';
 import toast from 'react-hot-toast';
 import BarcodeScannerModal from '../components/BarcodeScannerModal';
+import LabelPrinter from '../components/LabelPrinter';
+import WineMarketModal from '../components/WineMarketModal';
 
 // Print-to-PDF: open a print window with a styled sheet of all visible wines
 function printWinesPDF(wines) {
@@ -649,6 +651,8 @@ export default function WinesPage() {
                         <i className={`bi bi-${w.is_drunk ? 'arrow-counterclockwise' : 'check-circle'} me-2`}></i>
                         {w.is_drunk ? 'Remettre en stock' : 'Marquer comme bue'}
                       </button></li>
+                      <li><button className="dropdown-item" onClick={() => setModal({ mode: 'label', wine: w })}><i className="bi bi-tag me-2"></i>Imprimer étiquette</button></li>
+                      <li><button className="dropdown-item" onClick={() => setModal({ mode: 'market', wine: w })}><i className="bi bi-cart-check me-2"></i>Rechercher à racheter</button></li>
                       <li><hr className="dropdown-divider" style={{ borderColor: 'var(--cv-border)' }} /></li>
                       <li><button className="dropdown-item" style={{ color: '#dc3545' }} onClick={() => { if (window.confirm('Supprimer ce vin ?')) delMutation.mutate(w.id); }}>
                         <i className="bi bi-trash me-2"></i>Supprimer
@@ -673,6 +677,12 @@ export default function WinesPage() {
           onClose={() => setModal(null)}
           onResult={(data) => handleBarcodeResult(data)}
         />
+      )}
+      {modal?.mode === 'label' && (
+        <LabelPrinter item={modal.wine} itemType="wine" onClose={() => setModal(null)} />
+      )}
+      {modal?.mode === 'market' && (
+        <WineMarketModal wine={modal.wine} onClose={() => setModal(null)} />
       )}
     </div>
   );
