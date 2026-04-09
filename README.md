@@ -86,7 +86,7 @@
 |--------|-------------|
 | Frontend | React 19, Bootstrap 5, React Query v5, D3.js, Axios |
 | Build | Vite 6 + @vitejs/plugin-react |
-| Backend | Node.js 24, Express 4, JWT, Multer, Sharp 0.34, Cheerio |
+| Backend | Node.js 24, Express 4, JWT, Multer, Sharp 0.34, Axios, Cheerio |
 | Base de données | MariaDB 12 (mysql2 driver) |
 | Cache | Redis 7 |
 | IA | Claude, ChatGPT, Mistral, OpenWebUI/Ollama — Sommelier + Vision |
@@ -176,6 +176,7 @@ cave-vigne/
 │   │   │   ├── auth.js         # Login, register, refresh, 2FA TOTP, reset password
 │   │   │   ├── wines.js        # CRUD vins + accords + enrichissement + barcode (cache→OFF→scrapers)
 │   │   │   ├── spirits.js      # CRUD spiritueux + barcode
+│   │   │   ├── beers.js        # CRUD bières + stats + barcode (cache→OFF→V&B/Untappd/RateBeer)
 │   │   │   ├── sharing.js      # Caves partagées (read/write) + invitations + permissions
 │   │   │   ├── sommelier.js    # IA accord + scan + recettes + recommend + region-spotlight
 │   │   │   ├── tasting.js      # Journal de dégustation par bouteille
@@ -214,6 +215,7 @@ cave-vigne/
 │   │   │   ├── Dashboard.jsx          # Donut Chart.js + valeur + maturité + analyse IA
 │   │   │   ├── WinesPage.jsx          # CRUD + dégustation + barcode + enrichissement + PDF + bulk
 │   │   │   ├── SpiritsPage.jsx        # CRUD + barcode scan
+│   │   │   ├── BeersPage.jsx          # Collection bières (16 types) + barcode scan
 │   │   │   ├── CellarPage.jsx         # Vue 3D des casiers (CSS3D, drag-to-rotate)
 │   │   │   ├── SharedCavesPage.jsx    # Caves partagées (invite, lecture/écriture collaborative)
 │   │   │   ├── WishlistPage.jsx
