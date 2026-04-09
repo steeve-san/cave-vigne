@@ -133,7 +133,6 @@ router.delete('/:id', auth, requireRole('user', 'admin'), async (req, res) => {
 // Même chaîne que /api/wines/barcode : cache local → OFF → scrapers
 // Retourne des champs orientés spiritueux (name, producer, origin, notes)
 const { scrapeWineByEan } = require('../services/wineScraper');
-const db = require('../config/db');
 
 router.get('/barcode/:ean', auth, async (req, res) => {
   const { ean } = req.params;
