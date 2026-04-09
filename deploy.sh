@@ -79,10 +79,16 @@ if [[ "$UPDATE_MODE" == "true" ]]; then
 
   # ── Redémarrage PM2 ──
   section "3/3 — Redémarrage PM2"
-  pm2 restart cave-vigne-api --update-env --force 2>/dev/null || \
+  if pm2 list | grep -q cave-vigne-api; then
+    pm2 delete cave-vigne-api 2>/dev/null || true
+  fi
+  if [[ -f "${APP_DIR}/backend/ecosystem.config.js" ]]; then
+    pm2 start "${APP_DIR}/backend/ecosystem.config.js" --env production
+  else
     pm2 start "${APP_DIR}/backend/src/server.js" \
       --name cave-vigne-api --cwd "${APP_DIR}/backend" \
       --max-memory-restart 250M -i max --env production
+  fi
   pm2 save
   success "Application redémarrée"
 
