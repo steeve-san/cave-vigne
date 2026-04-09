@@ -1,6 +1,6 @@
 # 🍷 Cave & Vigne
 
-> **Gestionnaire de cave à vin et spiritueux** — Application web full-stack avec sommelier IA, cartes interactives et scan d'étiquettes par vision artificielle.
+> **Gestionnaire de cave à vin, spiritueux et bières** — Application web full-stack avec sommelier IA, cartes interactives, scan d'étiquettes par vision artificielle, recherche de prix de marché et imprimante d'étiquettes.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-C9A84C.svg)](./LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-24.x-339933?logo=node.js)](https://nodejs.org)
@@ -28,13 +28,13 @@
 | 🤖 **Sommelier IA multi-provider** | Accords mets/vins depuis la cave — Claude, ChatGPT, Mistral ou OpenWebUI/Ollama |
 | 📷 **Scan d'étiquettes** | Caméra ou photo importée → IA Vision extrait les infos automatiquement |
 | 📊 **Analyse IA de cave** | Score diversité/équilibre, points forts, occasion parfaite, axes d'amélioration |
-| 🔍 **Enrichissement** | Import automatique depuis Open Food Facts |
+| 🔍 **Enrichissement multi-sources** | Vivino → Open Food Facts → Vinatis → LRVF → fallback générique |
 | 🍽️ **Recettes associées** | Suggestions de recettes via TheMealDB |
 | 📓 **Journal de dégustation** | Notes par bouteille (robe, nez, bouche, finale, note /100) |
 | 💌 **Liste de souhaits** | Vins à acquérir avec priorité, budget max et lien boutique |
 | 📤 **Export / Import CSV** | Cave exportable et importable (compatible Excel) |
-| 🌍 **Carte mondiale** | Vignobles du monde avec vos bouteilles en surbrillance |
-| 🇫🇷 **Carte France** | Régions viticoles françaises avec cépages, AOC et vos stocks |
+| 🌍 **Carte mondiale** | Vins (cercles), spiritueux (diamants) et bières (triangles) — filtres par catégorie + détail des bouteilles en cave |
+| 🇫🇷 **Carte France v2** | 16 régions viticoles, zoom/pan D3, filtre cépage, overlay domaines en cave, clic région → détail AOC + cépages + bouteilles |
 | 🗺 **Carte spiritueux** | Origines mondiales de vos spiritueux |
 | ⭐ **Accords notés** | Notation 5 étoiles des accords mets/vin avec commentaire |
 | 🌐 **Catalogue public** | Mode visiteur sans authentification (configurable) |
@@ -46,8 +46,13 @@
 | ⏳ **Tracker de maturité** | Vins classés : à l'apogée, approche, trop jeune, passé prime |
 | 🔴 **Alerte dernière bouteille** | Badge rouge quand il ne reste qu'une bouteille |
 | 📦 **Scanner code-barres** | Caméra (BarcodeDetector) ou saisie : EAN-8/13, **ITF-14 cartons/caisses**, UPC, Code 128 → pré-remplit formulaire vin ou spiritueux |
+| 🔫 **Douchette code-barres** | Onglet dédié douchette HID (scanner physique USB/Bluetooth) — scan continu, historique 10 derniers, retour auto-focus |
 | 🗄️ **Cache barcode local** | Import bulk Open Food Facts (dump JSONL) → lookup instantané offline ; fallback Vivino / Oeni / Liv-ex |
+| 🏷️ **Imprimante d'étiquettes** | 4 formats : 57×32 mm, 89×36 mm, 100×62 mm, grille A4 — impression directe via CSS `@page` |
 | 🧊 **Vue 3D des casiers** | Rendu CSS3D, rotation par glisser, bouteilles colorées par type, détail au clic |
+| 🗂️ **Gestion des casiers v2** | Type de cave (Casier / Conservation / Vieillissement / Polyvalente), édition dimensions (L × H), mode déplacement de bouteilles |
+| 💸 **Recherche de rachat** | Prix de marché en ligne pour racheter une bouteille : Vivino, Vinatis, iDéalwine — prix min, prix moyen, disponibilité |
+| 🍹 **Générateur de cocktails** | Suggestion de cocktails et apéritifs selon les spiritueux et bières disponibles dans la cave (IA) |
 | 📄 **Export PDF** | Impression de la cave filtrée (tableau stylisé via window.print) |
 | 🌙 **"Que boire ce soir ?"** | L'IA choisit dans votre cave selon occasion, convives, envie |
 | 🔎 **Région spotlight** | Analyse IA d'une région viticole depuis la carte France |
@@ -183,7 +188,7 @@ cave-vigne/
 │   │   │   ├── wishlist.js     # Liste de souhaits
 │   │   │   └── settings.js     # Config admin (IA, SMTP, catalogue)
 │   │   ├── services/
-│   │   │   └── wineScraper.js  # Fallback EAN : UPC ItemDB → Vivino → Oeni → Liv-ex
+│   │   │   └── wineScraper.js  # EAN fallback : UPC ItemDB → Vivino → Oeni → Liv-ex ; enrichissement : Vivino → OFF → Vinatis → LRVF
 │   │   ├── jobs/
 │   │   │   ├── notifications.js        # Cron quotidien keep_until + valeur cave
 │   │   │   └── importOpenFoodFacts.js  # Import bulk dump JSONL → barcode_cache
@@ -201,7 +206,9 @@ cave-vigne/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── Layout.jsx               # Sidebar + Topbar responsive
-│   │   │   └── BarcodeScannerModal.jsx  # Caméra BarcodeDetector + saisie, EAN/ITF-14/UPC
+│   │   │   ├── BarcodeScannerModal.jsx  # Caméra BarcodeDetector + saisie + douchette HID, EAN/ITF-14/UPC
+│   │   │   ├── LabelPrinter.jsx         # Imprimante étiquettes (4 formats, CSS @page)
+│   │   │   └── WineMarketModal.jsx      # Recherche prix marché rachat (Vivino, Vinatis, iDéalwine)
 │   │   ├── context/
 │   │   │   └── AuthContext.jsx # Auth state global
 │   │   ├── locales/
@@ -212,19 +219,19 @@ cave-vigne/
 │   │   │   ├── Register.jsx
 │   │   │   ├── ForgotPassword.jsx
 │   │   │   ├── ResetPassword.jsx
-│   │   │   ├── Dashboard.jsx          # Donut Chart.js + valeur + maturité + analyse IA
-│   │   │   ├── WinesPage.jsx          # CRUD + dégustation + barcode + enrichissement + PDF + bulk
+│   │   │   ├── Dashboard.jsx          # Donut Chart.js + valeur + maturité + analyse IA + générateur cocktails
+│   │   │   ├── WinesPage.jsx          # CRUD + dégustation + barcode + enrichissement + PDF + bulk + étiquettes + rachat
 │   │   │   ├── SpiritsPage.jsx        # CRUD + barcode scan
 │   │   │   ├── BeersPage.jsx          # Collection bières (16 types) + barcode scan
-│   │   │   ├── CellarPage.jsx         # Vue 3D des casiers (CSS3D, drag-to-rotate)
+│   │   │   ├── CellarPage.jsx         # Vue 3D des casiers v2 (type cave, dimensions, déplacement)
 │   │   │   ├── SharedCavesPage.jsx    # Caves partagées (invite, lecture/écriture collaborative)
 │   │   │   ├── WishlistPage.jsx
 │   │   │   ├── SommelierPage.jsx      # Accord + "ce soir ?" + badge provider
 │   │   │   ├── ScanPage.jsx           # Vision IA + badge provider
 │   │   │   ├── ProfilePage.jsx        # Profil + 2FA
 │   │   │   ├── AdminPage.jsx          # Utilisateurs + paramètres IA multi-provider
-│   │   │   ├── WorldMapPage.jsx
-│   │   │   ├── FranceMapPage.jsx      # + région spotlight IA
+│   │   │   ├── WorldMapPage.jsx       # Vins + spiritueux + bières ; filtres catégorie
+│   │   │   ├── FranceMapPage.jsx      # 16 régions, zoom D3, filtre cépage, overlay domaines, spotlight IA
 │   │   │   └── SpiritsMapPage.jsx
 │   │   ├── services/
 │   │   │   └── api.js          # Axios + auto-refresh JWT
@@ -345,7 +352,8 @@ Ce projet est sous licence **MIT** — voir [LICENSE](./LICENSE) pour les détai
 - **Bootstrap 5** — Interface utilisateur
 - **Chart.js** — Graphiques et statistiques
 - **Open Food Facts** — Enrichissement et cache barcode local
-- **Vivino / Oeni / Liv-ex** — Scrapers fallback vins
+- **Vivino / Oeni / Liv-ex** — Scrapers fallback EAN vins + enrichissement + prix de marché
+- **Vinatis / iDéalwine / LRVF** — Scrapers enrichissement et prix de marché
 - **V&B / Untappd / RateBeer** — Scrapers fallback bières
 - **TheMealDB** — Suggestions de recettes associées
 
