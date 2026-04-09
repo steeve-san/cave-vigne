@@ -73,8 +73,7 @@ if [[ "$UPDATE_MODE" == "true" ]]; then
   rm -f .env.local
   echo "REACT_APP_API_URL=/api" > .env.production
   npm install --unsafe-perm --quiet
-  chmod -R +x node_modules/.bin/ 2>/dev/null || true
-  node node_modules/.bin/vite build
+  node node_modules/vite/bin/vite.js build
   cp -r build/. "${APP_DIR}/frontend/build/"
   success "Frontend buildé et copié"
 
@@ -444,8 +443,7 @@ REACT_APP_API_URL=/api
 FENV
 # --unsafe-perm ensures node_modules/.bin symlinks are executable when running as root
 npm install --unsafe-perm --quiet
-chmod -R +x node_modules/.bin/ 2>/dev/null || true
-node node_modules/.bin/vite build
+node node_modules/vite/bin/vite.js build
 cp -r build/. "${APP_DIR}/frontend/build/"
 success "Frontend buildé et copié"
 
