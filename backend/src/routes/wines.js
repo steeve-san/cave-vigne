@@ -118,12 +118,14 @@ router.post('/', auth, requireRole('user', 'admin'), uploadFields, async (req, r
     const labelUrl  = labelFile  ? await saveImage(labelFile.buffer,  'label',  req.user.id) : null;
     const bottleUrl = bottleFile ? await saveImage(bottleFile.buffer, 'bottle', req.user.id) : null;
 
+    const { food_pairings, certifications, abv, volume_ml } = req.body;
     const [result] = await db.query(
-      `INSERT INTO wines (user_id,name,appellation,vintage,type,producer,region,grapes,country,quantity,position,price,keep_until,notes,label_image,bottle_photo,domain_website,domain_description,soil_type,altitude)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      `INSERT INTO wines (user_id,name,appellation,vintage,type,producer,region,grapes,country,quantity,position,price,keep_until,notes,label_image,bottle_photo,domain_website,domain_description,soil_type,altitude,food_pairings,certifications,abv,volume_ml)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [req.user.id, name, appellation||null, vintage||null, type, producer||null, region||null, grapes||null,
        country||'France', quantity||1, position||null, price||null, keep_until||null, notes||null,
-       labelUrl, bottleUrl, domain_website||null, domain_description||null, soil_type||null, altitude||null]
+       labelUrl, bottleUrl, domain_website||null, domain_description||null, soil_type||null, altitude||null,
+       food_pairings||null, certifications||null, abv||null, volume_ml||null]
     );
     await cacheDel(`wines:${req.user.id}:*`);
     await cacheDel('wines:all:*');
@@ -143,7 +145,8 @@ router.put('/:id', auth, requireRole('user', 'admin'), uploadFields, async (req,
     if (!rows.length) return res.status(404).json({ error: 'Vin introuvable' });
 
     const fields = ['name','appellation','vintage','type','producer','region','grapes','country','quantity','position',
-                    'price','keep_until','notes','is_drunk','domain_website','domain_description','soil_type','altitude'];
+                    'price','keep_until','notes','is_drunk','domain_website','domain_description','soil_type','altitude',
+                    'food_pairings','certifications','abv','volume_ml'];
     const updates = []; const params = [];
     fields.forEach(f => { if (req.body[f] !== undefined) { updates.push(`${f} = ?`); params.push(req.body[f]); } });
 
@@ -327,9 +330,10 @@ Réponds UNIQUEMENT avec un objet JSON valide, sans texte avant ni après :
   "grapes": "cépages principaux séparés par des virgules",
   "domain_description": "description du domaine en 2-3 phrases",
   "soil_type": "type de sol du vignoble",
-  "keep_until": <année entière, ex: 2032>,
+  "keep_until": <année entière ex: 2032>,
   "notes": "description organoleptique : robe, nez, bouche, finale (3-4 phrases)",
-  "food_pairings": ["accord 1", "accord 2", "accord 3"]
+  "food_pairings": "accords séparés par des virgules ex: agneau rôti, fromages affinés",
+  "certifications": "certifications séparées par des virgules ex: AOP, Bio, Biodynamique ou null"
 }
 Laisse un champ null si tu n'es pas certain. Ne retourne QUE le JSON.`;
 
@@ -441,19 +445,55 @@ const {
   fetchAllMarketPrices, scoreRelevance,
 } = require('../services/wineScraper');
 
+// Download an image from URL and save to uploads/labels — returns relative path or null
+async function downloadLabelImage(url, userId) {
+  if (!url) return null;
+  try {
+    const https   = require('https');
+    const http    = require('http');
+    const path    = require('path');
+    const fs      = require('fs');
+    const sharp   = require('sharp');
+    const uploadDir = process.env.UPLOAD_DIR || './uploads';
+    const dir = path.join(uploadDir, 'labels');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    const client = url.startsWith('https') ? https : http;
+    const buffer = await new Promise((resolve, reject) => {
+      const chunks = [];
+      client.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, res => {
+        if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+        res.on('error', reject);
+      }).on('error', reject);
+    });
+
+    const filename = `label_${userId}_${Date.now()}.webp`;
+    const outPath  = path.join(dir, filename);
+    await sharp(buffer).resize(400, 600, { fit: 'inside', withoutEnlargement: true }).webp({ quality: 85 }).toFile(outPath);
+    return `/uploads/labels/${filename}`;
+  } catch (e) {
+    console.warn('[enrich] label download failed:', e.message);
+    return null;
+  }
+}
+
 router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM wines WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
     if (!rows.length) return res.status(404).json({ error: 'Vin introuvable' });
     const wine = rows[0];
-    // Use name + appellation for best search accuracy (avoid adding vintage which confuses OFf)
+
+    // OFf: name + appellation (no vintage — confuses it)
     const query     = [wine.name, wine.appellation, wine.producer].filter(Boolean).join(' ');
-    const queryFull = [wine.name, wine.producer, wine.vintage].filter(Boolean).join(' ');
+    // Vivino: name only gives cleaner results; type filter narrows further
+    const queryViv  = wine.name;
 
     // Run all enrichment sources in parallel
     const [vivinoR, offR, wsR] = await Promise.allSettled([
-      vivinoSearch(queryFull),
-      openFoodFactsSearch(query),          // OFf: name+appellation, no vintage
+      vivinoSearch(queryViv, wine.type),
+      openFoodFactsSearch(query),
       wineSearcherSearch(wine.name, wine.vintage),
     ]);
 
@@ -462,6 +502,8 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
     // ── 1. Vivino ─────────────────────────────────────────────────────────────
     const viv = vivinoR.status === 'fulfilled' ? vivinoR.value : null;
     if (viv?.name && scoreRelevance(viv.name, wine.name) >= 0.2) {
+      // Download label to local storage so it can be saved on apply
+      const savedLabel = await downloadLabelImage(viv.label_url, req.user.id);
       results.push({
         source:         'Vivino',
         name:           viv.name,
@@ -475,7 +517,7 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
         notes:          viv.notes          || null,
         food_pairings:  viv.food_pairings  || null,
         flavor_profile: viv.flavor_profile || null,
-        label_image:    viv.label_url      || null,
+        label_image:    savedLabel || viv.label_url || null,
         rating:         viv.rating         || null,
         ratings_count:  viv.ratings_count  || null,
         price_avg:      viv.price_avg      || null,
@@ -487,6 +529,7 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
     const offList = (offR.status === 'fulfilled' ? offR.value : null) || [];
     for (const p of offList.slice(0, 3)) {
       if (!p?.name) continue;
+      const savedLabel = await downloadLabelImage(p.label_image, req.user.id);
       results.push({
         source:         'Open Food Facts',
         name:           p.name,
@@ -497,7 +540,7 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
         grapes:         p.grapes         || null,
         abv:            p.abv            || null,
         certifications: p.certifications || null,
-        label_image:    p.label_image    || null,
+        label_image:    savedLabel || p.label_image || null,
         volume_ml:      p.volume_ml      || null,
         stores:         p.stores         || null,
         manufacturing:  p.manufacturing  || null,

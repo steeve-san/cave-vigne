@@ -51,6 +51,7 @@ const EMPTY_FORM = {
   name: '', appellation: '', vintage: '', type: 'rouge', producer: '', region: '', grapes: '',
   country: 'France', quantity: 1, position: '', price: '', keep_until: '', notes: '',
   domain_website: '', domain_description: '', soil_type: '', altitude: '',
+  food_pairings: '', certifications: '', abv: '', volume_ml: '',
 };
 
 function PhotoPicker({ label, current, onChange, t }) {
@@ -90,6 +91,8 @@ function WineModal({ wine, prefill, onClose, onSave }) {
     position: wine.position || '', notes: wine.notes || '',
     domain_website: wine.domain_website || '', domain_description: wine.domain_description || '',
     soil_type: wine.soil_type || '', altitude: wine.altitude || '',
+    food_pairings: wine.food_pairings || '', certifications: wine.certifications || '',
+    abv: wine.abv || '', volume_ml: wine.volume_ml || '',
   } : prefill ? { ...EMPTY_FORM, ...prefill } : { ...EMPTY_FORM });
   const [labelFile, setLabelFile] = useState(null);
   const [bottleFile, setBottleFile] = useState(null);
@@ -124,16 +127,21 @@ function WineModal({ wine, prefill, onClose, onSave }) {
   const applyEnrichResult = r => {
     setForm(f => ({
       ...f,
-      // Apply each field only if the result has a value for it
-      ...(r.producer    && { producer:    r.producer }),
-      ...(r.region      && { region:      r.region }),
-      ...(r.appellation && { appellation: r.appellation }),
-      ...(r.country     && { country:     r.country.split(',')[0].trim() }),
-      ...(r.type        && { type:        r.type }),
-      ...(r.grapes      && { grapes:      r.grapes }),
-      ...(r.vintage     && !f.vintage && { vintage: String(r.vintage) }),
-      ...(r.notes       && !f.notes   && { notes:   r.notes }),
-      ...(r.label_image && !f.label_url && { label_url: r.label_image }),
+      ...(r.producer           && { producer:           r.producer }),
+      ...(r.region             && { region:             r.region }),
+      ...(r.appellation        && { appellation:        r.appellation }),
+      ...(r.country            && { country:            r.country.split(',')[0].trim() }),
+      ...(r.type               && { type:               r.type }),
+      ...(r.grapes             && { grapes:             r.grapes }),
+      ...(r.vintage            && !f.vintage            && { vintage:            String(r.vintage) }),
+      ...(r.notes              && !f.notes              && { notes:              r.notes }),
+      ...(r.food_pairings      && !f.food_pairings      && { food_pairings:      r.food_pairings }),
+      ...(r.domain_description && !f.domain_description && { domain_description: r.domain_description }),
+      ...(r.soil_type          && !f.soil_type          && { soil_type:          r.soil_type }),
+      ...(r.certifications     && !f.certifications     && { certifications:     r.certifications }),
+      ...(r.abv                && !f.abv                && { abv:                String(r.abv) }),
+      ...(r.volume_ml          && !f.volume_ml          && { volume_ml:          String(r.volume_ml) }),
+      ...(r.label_image        && !f.label_url          && { label_url:          r.label_image }),
     }));
     setEnrichResults(null);
     toast.success('Données appliquées');
@@ -143,6 +151,7 @@ function WineModal({ wine, prefill, onClose, onSave }) {
     ['region', 'Région'], ['country', 'Pays'], ['appellation', 'Appellation'],
     ['grapes', 'Cépages'], ['domain_description', 'Description domaine'],
     ['soil_type', 'Type de sol'], ['keep_until', 'Garder jusqu\'à'], ['notes', 'Notes'],
+    ['food_pairings', 'Accords mets'], ['certifications', 'Certifications'],
   ];
 
   const handleAiEnrich = async () => {
@@ -164,7 +173,12 @@ function WineModal({ wine, prefill, onClose, onSave }) {
 
   const applyAiEnrich = () => {
     const updates = {};
-    AI_ENRICH_FIELDS.forEach(([k]) => { if (aiEnrichSelected[k] && aiEnrichData[k] != null) updates[k] = String(aiEnrichData[k]); });
+    AI_ENRICH_FIELDS.forEach(([k]) => {
+      if (aiEnrichSelected[k] && aiEnrichData[k] != null) {
+        const v = aiEnrichData[k];
+        updates[k] = Array.isArray(v) ? v.join(', ') : String(v);
+      }
+    });
     setForm(f => ({ ...f, ...updates }));
     setAiEnrichData(null);
     toast.success(t('wines.aiEnrichApply'));
@@ -317,6 +331,14 @@ function WineModal({ wine, prefill, onClose, onSave }) {
                     <input className="form-control" value={form.soil_type} onChange={set('soil_type')} placeholder="Graves, argilo-calcaire..." /></div>
                   <div className="col-md-6"><label className="form-label">{t('wines.altitude')}</label>
                     <input className="form-control" value={form.altitude} onChange={set('altitude')} placeholder="ex: 250 m" /></div>
+                  <div className="col-md-4"><label className="form-label">{t('wines.abv')}</label>
+                    <input className="form-control" type="number" min="0" max="25" step="0.1" value={form.abv} onChange={set('abv')} placeholder="13.5" /></div>
+                  <div className="col-md-4"><label className="form-label">{t('wines.volume')}</label>
+                    <input className="form-control" type="number" min="100" step="1" value={form.volume_ml} onChange={set('volume_ml')} placeholder="750" /></div>
+                  <div className="col-md-4"><label className="form-label">{t('wines.certifications')}</label>
+                    <input className="form-control" value={form.certifications} onChange={set('certifications')} placeholder="AOP, Bio, Biodynamique..." /></div>
+                  <div className="col-12"><label className="form-label">{t('wines.foodPairings')}</label>
+                    <input className="form-control" value={form.food_pairings} onChange={set('food_pairings')} placeholder="Agneau, fromages affinés, gibier..." /></div>
                   <div className="col-12"><label className="form-label">{t('wines.domainDescription')}</label>
                     <textarea className="form-control" rows={5} value={form.domain_description} onChange={set('domain_description')} placeholder="Histoire du domaine, viticulture, vinification..." /></div>
                 </div>

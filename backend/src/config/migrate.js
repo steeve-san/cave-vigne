@@ -281,6 +281,11 @@ async function migrate() {
     `ALTER TABLE wines ADD COLUMN IF NOT EXISTS domain_description TEXT`,
     `ALTER TABLE wines ADD COLUMN IF NOT EXISTS soil_type VARCHAR(200)`,
     `ALTER TABLE wines ADD COLUMN IF NOT EXISTS altitude VARCHAR(100)`,
+    // Enrichment fields — wines
+    `ALTER TABLE wines ADD COLUMN IF NOT EXISTS food_pairings TEXT`,
+    `ALTER TABLE wines ADD COLUMN IF NOT EXISTS certifications VARCHAR(500)`,
+    `ALTER TABLE wines ADD COLUMN IF NOT EXISTS abv DECIMAL(4,1)`,
+    `ALTER TABLE wines ADD COLUMN IF NOT EXISTS volume_ml SMALLINT DEFAULT 750`,
     // Domain & photos — spirits
     `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS bottle_photo VARCHAR(500)`,
     `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS domain_website VARCHAR(500)`,

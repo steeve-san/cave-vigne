@@ -40,6 +40,7 @@ const fr = {
     // Domaine
     domainWebsite: 'Site web du domaine', soilType: 'Type de sol', altitude: 'Altitude (m)',
     domainDescription: 'Description du domaine',
+    abv: 'Degré alcool (%)', volume: 'Volume (ml)', certifications: 'Certifications', foodPairings: 'Accords mets',
     // Photos
     labelPhoto: 'Étiquette de la bouteille', bottlePhoto: 'Photo de la bouteille',
     changePhoto: 'Changer', choosePhoto: 'Choisir', removePhoto: 'Supprimer',

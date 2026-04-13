@@ -104,31 +104,49 @@ async function callAI(messages, maxTokens = 1000) {
     return callAnthropic(messages, maxTokens, cfg);
   }
 
-  switch (provider) {
-    case 'anthropic':
+  // Helper: fall back to Anthropic if a key is available
+  const anthropicFallback = (reason) => {
+    const anthropicKey = process.env.ANTHROPIC_API_KEY || cfg.anthropic_key;
+    if (anthropicKey) {
+      console.warn(`[ai] Provider "${provider}" ${reason} — falling back to Anthropic`);
       return callAnthropic(messages, maxTokens, cfg);
-
-    case 'openai': {
-      const k     = process.env.OPENAI_API_KEY || cfg.openai_key;
-      const model = cfg.openai_model || 'gpt-4o-mini';
-      return callOpenAICompat(messages, maxTokens, k, 'https://api.openai.com/v1', model);
     }
+    throw new Error(`Provider "${provider}" ${reason} and no Anthropic fallback key configured`);
+  };
 
-    case 'mistral': {
-      const k     = process.env.MISTRAL_API_KEY || cfg.mistral_key;
-      const model = cfg.mistral_model || 'mistral-small-latest';
-      return callOpenAICompat(messages, maxTokens, k, 'https://api.mistral.ai/v1', model);
-    }
+  try {
+    switch (provider) {
+      case 'anthropic':
+        return await callAnthropic(messages, maxTokens, cfg);
 
-    case 'openwebui':
-      return callOpenWebUI(messages, maxTokens, cfg);
-
-    default:
-      // Unknown provider → use Anthropic if available
-      if (process.env.ANTHROPIC_API_KEY || cfg.anthropic_key) {
-        return callAnthropic(messages, maxTokens, cfg);
+      case 'openai': {
+        const k     = process.env.OPENAI_API_KEY || cfg.openai_key;
+        const model = cfg.openai_model || 'gpt-4o-mini';
+        return await callOpenAICompat(messages, maxTokens, k, 'https://api.openai.com/v1', model);
       }
-      throw new Error(`Fournisseur IA inconnu : ${provider}`);
+
+      case 'mistral': {
+        const k     = process.env.MISTRAL_API_KEY || cfg.mistral_key;
+        const model = cfg.mistral_model || 'mistral-small-latest';
+        return await callOpenAICompat(messages, maxTokens, k, 'https://api.mistral.ai/v1', model);
+      }
+
+      case 'openwebui':
+        return await callOpenWebUI(messages, maxTokens, cfg);
+
+      default:
+        return anthropicFallback('is unknown provider');
+    }
+  } catch (err) {
+    // On quota (429), auth (401/403), or service errors from non-Anthropic providers,
+    // silently fall back to Anthropic so the user's experience is uninterrupted.
+    if (provider !== 'anthropic' &&
+        (err.message.includes('429') || err.message.includes('401') ||
+         err.message.includes('403') || err.message.includes('quota') ||
+         err.message.includes('exceeded') || err.message.includes('Unauthorized'))) {
+      return anthropicFallback(`failed (${err.message.slice(0, 80)})`);
+    }
+    throw err;
   }
 }
 

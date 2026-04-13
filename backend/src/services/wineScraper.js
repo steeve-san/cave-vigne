@@ -155,13 +155,21 @@ async function upcItemDbLookup(ean) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // 2. VIVINO — best structured wine data
 // ═══════════════════════════════════════════════════════════════════════════════
-async function vivinoSearch(query) {
+/** Map our wine type → Vivino wine_type_id for filtering */
+const VIVINO_TYPE_IDS = { rouge: 1, blanc: 2, rosé: 3, pétillant: 7, petillant: 7 };
+
+async function vivinoSearch(query, wineType) {
   try {
+    const params = {
+      q: query, language: 'fr', country_code: 'fr',
+      min_rating: 1, per_page: 7,
+      // No order_by → Vivino defaults to relevance/match ranking
+    };
+    const typeId = wineType ? VIVINO_TYPE_IDS[wineType.toLowerCase()] : null;
+    if (typeId) params['wine_type_ids[]'] = typeId;
+
     const { data } = await axios.get('https://www.vivino.com/api/explore/explore', {
-      params: {
-        q: query, language: 'fr', country_code: 'fr',
-        min_rating: 1, order_by: 'ratings_count', order: 'desc', per_page: 5,
-      },
+      params,
       headers: {
         ...HEADERS,
         Accept: 'application/json',

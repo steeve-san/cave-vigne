@@ -44,6 +44,7 @@ const en = {
     aiEnrichApply: 'Apply selection', aiEnrichPairings: 'Suggested pairings',
     domainWebsite: 'Estate website', soilType: 'Soil type', altitude: 'Altitude (m)',
     domainDescription: 'Estate description',
+    abv: 'Alcohol (%)', volume: 'Volume (ml)', certifications: 'Certifications', foodPairings: 'Food pairings',
     labelPhoto: 'Bottle label', bottlePhoto: 'Bottle photo',
     changePhoto: 'Change', choosePhoto: 'Choose', removePhoto: 'Remove',
   },
