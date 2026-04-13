@@ -174,7 +174,18 @@ async function vivinoSearch(query) {
     const matches = data?.explore_vintage?.matches;
     if (!matches?.length) return null;
 
-    const m       = matches[0];
+    // Pick the best-matching result by name relevance (not just ratings_count)
+    let best = matches[0];
+    let bestScore = 0;
+    for (const candidate of matches) {
+      const candidateName = candidate.vintage?.wine?.name || '';
+      const s = scoreRelevance(candidateName, query);
+      if (s > bestScore) { bestScore = s; best = candidate; }
+    }
+    // If no candidate scores above threshold, skip Vivino entirely
+    if (bestScore < 0.2) return null;
+
+    const m       = best;
     const vintage = m.vintage;
     const wine    = vintage?.wine;
     const winery  = wine?.winery;
@@ -887,6 +898,8 @@ async function scrapeBeerByName(name, hint) {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 module.exports = {
+  // Shared helpers
+  scoreRelevance,
   // Wine enrichment
   scrapeWineByEan, scrapeWineByName, vivinoSearch,
   openFoodFactsSearch, openFoodFactsByEan, wineSearcherSearch,

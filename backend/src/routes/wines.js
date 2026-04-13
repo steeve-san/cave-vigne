@@ -438,7 +438,7 @@ router.get('/value-history', auth, async (req, res) => {
 // Sources: Vivino · Open Food Facts (full) · Wine-Searcher · Oeni · Liv-ex
 const {
   openFoodFactsSearch, wineSearcherSearch, oeniSearch, livexSearch,
-  fetchAllMarketPrices,
+  fetchAllMarketPrices, scoreRelevance,
 } = require('../services/wineScraper');
 
 router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) => {
@@ -461,7 +461,7 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
 
     // ── 1. Vivino ─────────────────────────────────────────────────────────────
     const viv = vivinoR.status === 'fulfilled' ? vivinoR.value : null;
-    if (viv?.name) {
+    if (viv?.name && scoreRelevance(viv.name, wine.name) >= 0.2) {
       results.push({
         source:         'Vivino',
         name:           viv.name,
