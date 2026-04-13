@@ -445,13 +445,15 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
   try {
     const [rows] = await db.query('SELECT * FROM wines WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
     if (!rows.length) return res.status(404).json({ error: 'Vin introuvable' });
-    const wine  = rows[0];
-    const query = [wine.name, wine.producer, wine.vintage].filter(Boolean).join(' ');
+    const wine = rows[0];
+    // Use name + appellation for best search accuracy (avoid adding vintage which confuses OFf)
+    const query     = [wine.name, wine.appellation, wine.producer].filter(Boolean).join(' ');
+    const queryFull = [wine.name, wine.producer, wine.vintage].filter(Boolean).join(' ');
 
     // Run all enrichment sources in parallel
     const [vivinoR, offR, wsR] = await Promise.allSettled([
-      vivinoSearch(query),
-      openFoodFactsSearch(query),
+      vivinoSearch(queryFull),
+      openFoodFactsSearch(query),          // OFf: name+appellation, no vintage
       wineSearcherSearch(wine.name, wine.vintage),
     ]);
 

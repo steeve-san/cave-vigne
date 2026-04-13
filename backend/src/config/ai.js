@@ -6,8 +6,10 @@ async function getAIConfig() {
   const [rows] = await db.query(
     `SELECT setting_key, setting_value FROM system_settings
      WHERE setting_key IN (
-       'ai_provider','anthropic_key','openai_key','openai_model',
-       'mistral_key','mistral_model','openwebui_url','openwebui_key','openwebui_model'
+       'ai_provider','anthropic_key','anthropic_model',
+       'openai_key','openai_model',
+       'mistral_key','mistral_model',
+       'openwebui_url','openwebui_key','openwebui_model'
      )`
   );
   const cfg = {};
@@ -93,28 +95,39 @@ async function callOpenWebUI(messages, maxTokens, cfg) {
 // ── Main dispatcher ───────────────────────────────────────────────────────────
 async function callAI(messages, maxTokens = 1000) {
   const cfg = await getAIConfig();
-  const { provider } = resolveKey(cfg);
+  const { provider, key } = resolveKey(cfg);
+
+  // If the configured provider has no key but ANTHROPIC_API_KEY env is set,
+  // fall back silently to Anthropic rather than throwing a confusing error.
+  if (!key && provider !== 'openwebui' && process.env.ANTHROPIC_API_KEY) {
+    console.warn(`[ai] Provider "${provider}" has no key — falling back to Anthropic (env key)`);
+    return callAnthropic(messages, maxTokens, cfg);
+  }
 
   switch (provider) {
     case 'anthropic':
       return callAnthropic(messages, maxTokens, cfg);
 
     case 'openai': {
-      const key   = process.env.OPENAI_API_KEY || cfg.openai_key;
+      const k     = process.env.OPENAI_API_KEY || cfg.openai_key;
       const model = cfg.openai_model || 'gpt-4o-mini';
-      return callOpenAICompat(messages, maxTokens, key, 'https://api.openai.com/v1', model);
+      return callOpenAICompat(messages, maxTokens, k, 'https://api.openai.com/v1', model);
     }
 
     case 'mistral': {
-      const key   = process.env.MISTRAL_API_KEY || cfg.mistral_key;
+      const k     = process.env.MISTRAL_API_KEY || cfg.mistral_key;
       const model = cfg.mistral_model || 'mistral-small-latest';
-      return callOpenAICompat(messages, maxTokens, key, 'https://api.mistral.ai/v1', model);
+      return callOpenAICompat(messages, maxTokens, k, 'https://api.mistral.ai/v1', model);
     }
 
     case 'openwebui':
       return callOpenWebUI(messages, maxTokens, cfg);
 
     default:
+      // Unknown provider → use Anthropic if available
+      if (process.env.ANTHROPIC_API_KEY || cfg.anthropic_key) {
+        return callAnthropic(messages, maxTokens, cfg);
+      }
       throw new Error(`Fournisseur IA inconnu : ${provider}`);
   }
 }
@@ -168,8 +181,12 @@ async function callAIVision(imageBase64, imageMediaType, textPrompt, maxTokens =
 async function checkAIAvailable() {
   const cfg = await getAIConfig();
   const { provider, key } = resolveKey(cfg);
-  if (provider === 'openwebui') return { ok: true, provider }; // URL-based, no key required
-  if (!key) return { ok: false, provider, error: `Clé API ${provider} non configurée` };
+  if (provider === 'openwebui') return { ok: true, provider };
+  // If the configured provider has no key, try falling back to Anthropic env key
+  if (!key) {
+    if (process.env.ANTHROPIC_API_KEY) return { ok: true, provider: 'anthropic' };
+    return { ok: false, provider, error: `Clé API ${provider} non configurée` };
+  }
   return { ok: true, provider };
 }
 

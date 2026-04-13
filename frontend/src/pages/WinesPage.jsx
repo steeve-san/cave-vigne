@@ -124,9 +124,16 @@ function WineModal({ wine, prefill, onClose, onSave }) {
   const applyEnrichResult = r => {
     setForm(f => ({
       ...f,
-      producer: r.producer || f.producer,
-      country: r.country?.split(',')[0]?.trim() || f.country,
-      grapes: r.grapes || f.grapes,
+      // Apply each field only if the result has a value for it
+      ...(r.producer    && { producer:    r.producer }),
+      ...(r.region      && { region:      r.region }),
+      ...(r.appellation && { appellation: r.appellation }),
+      ...(r.country     && { country:     r.country.split(',')[0].trim() }),
+      ...(r.type        && { type:        r.type }),
+      ...(r.grapes      && { grapes:      r.grapes }),
+      ...(r.vintage     && !f.vintage && { vintage: String(r.vintage) }),
+      ...(r.notes       && !f.notes   && { notes:   r.notes }),
+      ...(r.label_image && !f.label_url && { label_url: r.label_image }),
     }));
     setEnrichResults(null);
     toast.success('Données appliquées');
@@ -263,9 +270,17 @@ function WineModal({ wine, prefill, onClose, onSave }) {
                         {enrichResults.map((r, i) => (
                           <button key={i} type="button" className="d-flex align-items-center gap-2 w-100 mb-1 p-1" style={{ background: 'none', border: '0.5px solid var(--cv-border)', borderRadius: 6, cursor: 'pointer', textAlign: 'left' }} onClick={() => applyEnrichResult(r)}>
                             {r.label_image && <img src={r.label_image} alt="" style={{ width: 32, height: 40, objectFit: 'contain' }} />}
-                            <div>
-                              <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}>{r.name}</div>
-                              <div style={{ fontSize: '0.7rem', color: 'var(--cv-text2)' }}>{r.producer} · {r.country}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)', fontFamily: 'Cormorant Garamond,serif' }}>{r.name}{r.vintage ? ` ${r.vintage}` : ''}</div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--cv-text2)' }}>
+                                {[r.producer, r.appellation || r.region, r.country].filter(Boolean).join(' · ')}
+                              </div>
+                              <div className="d-flex gap-2 mt-1 flex-wrap">
+                                {r.source && <span style={{ fontSize: '0.62rem', padding: '1px 5px', borderRadius: 3, background: 'rgba(201,168,76,0.12)', color: 'var(--cv-gold)' }}>{r.source}</span>}
+                                {r.type && <span style={{ fontSize: '0.62rem', padding: '1px 5px', borderRadius: 3, background: 'rgba(201,168,76,0.08)', color: 'var(--cv-text3)' }}>{r.type}</span>}
+                                {r.grapes && <span style={{ fontSize: '0.62rem', color: 'var(--cv-text3)' }}>{r.grapes.slice(0, 40)}</span>}
+                                {r.rating && <span style={{ fontSize: '0.62rem', color: 'var(--cv-gold)' }}>★ {r.rating}</span>}
+                              </div>
                             </div>
                           </button>
                         ))}

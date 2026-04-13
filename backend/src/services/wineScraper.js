@@ -61,6 +61,23 @@ function extractNextData($) {
   } catch { return null; }
 }
 
+/**
+ * Relevance score between a result name and the original wine name query.
+ * Returns 0.0–1.0. Ignores vintage years and short stop-words.
+ * Used to filter out completely unrelated OFf/scraper results.
+ */
+function scoreRelevance(resultName, wineName) {
+  if (!resultName || !wineName) return 0;
+  const stop = new Set(['de', 'du', 'des', 'le', 'la', 'les', 'et', 'en', 'au', 'un', 'une', 'sur', 'the', 'of', 'and']);
+  const words = wineName.toLowerCase()
+    .split(/[\s\-_,]+/)
+    .filter(w => w.length > 2 && !/^\d{4}$/.test(w) && !stop.has(w));
+  if (!words.length) return 1; // nothing meaningful to compare
+  const r = resultName.toLowerCase();
+  const hits = words.filter(w => r.includes(w)).length;
+  return hits / words.length;
+}
+
 /** Parse a price string like "24,90 €" or "$18.50" → float */
 function parsePrice(str = '') {
   if (!str) return null;
@@ -220,7 +237,7 @@ async function openFoodFactsSearch(query) {
     });
 
     return (data.products || [])
-      .filter(p => p.product_name)
+      .filter(p => p.product_name && scoreRelevance(p.product_name, query) >= 0.3)
       .slice(0, 4)
       .map(p => _mapOFFProduct(p));
   } catch { return []; }
