@@ -27,63 +27,45 @@ DEPLOY_USER="${SUDO_USER:-www-data}"
 
 # ─── Détection install existante ─────────────────────────────────────────────
 UPDATE_MODE=false
+GIT_MODE=false
 if [[ -f "${APP_DIR}/backend/.env" ]] && command -v pm2 &>/dev/null; then
   echo ""
   echo -e "${BOLD}Installation existante détectée${NC} (${APP_DIR})"
   echo ""
-  echo "  [1] Mettre à jour l'application (code + dépendances, conserve .env et DB)"
-  echo "  [2] Déploiement complet (réinstalle tout)"
+  echo "  [1] Mettre à jour depuis GitHub  (git fetch → diff → pull → rebuild)"
+  echo "  [2] Mettre à jour depuis ce dossier (copie locale, conserve .env et DB)"
+  echo "  [3] Déploiement complet (réinstalle tout)"
   echo ""
-  read -rp "Que souhaitez-vous faire ? [1/2] : " INSTALL_MODE
-  [[ "$INSTALL_MODE" == "1" ]] && UPDATE_MODE=true
+  read -rp "Que souhaitez-vous faire ? [1/2/3] : " INSTALL_MODE
+  [[ "$INSTALL_MODE" == "1" ]] && GIT_MODE=true
+  [[ "$INSTALL_MODE" == "2" ]] && UPDATE_MODE=true
 fi
 
-# ─── Mode UPDATE ──────────────────────────────────────────────────────────────
-if [[ "$UPDATE_MODE" == "true" ]]; then
-  section "Mise à jour Cave & Vigne"
+# ─── Helpers post-code : npm install + migrate + build + pm2 restart ─────────
+do_update_steps() {
+  local SRC_BACKEND="$1"   # répertoire source du backend (déjà à jour)
+  local SRC_FRONTEND="$2"  # répertoire source du frontend
 
-  # Lire le domaine depuis .env existant
-  DOMAIN=$(grep "^API_URL=" "${APP_DIR}/backend/.env" 2>/dev/null | sed 's|.*://||' || true)
-  [[ -z "$DOMAIN" ]] && { read -rp "Domaine (ex: cavevigne.fr) : " DOMAIN; }
-
-  echo ""
-  info "Domaine   : $DOMAIN"
-  info "App dir   : $APP_DIR"
-  info "Actions   : code → npm install → migrate → build frontend → pm2 restart"
-  echo ""
-  read -rp "Confirmer la mise à jour ? [o/N] " CONFIRM
-  [[ "$CONFIRM" =~ ^[oO]$ ]] || { info "Annulé."; exit 0; }
-
-  # ── Mise à jour backend ──
-  section "1/3 — Mise à jour backend"
-  # Sauvegarder .env avant la copie (au cas où le source en contiendrait un)
-  cp "${APP_DIR}/backend/.env" /tmp/cave-vigne-env.bak
-  cp -r "${SCRIPT_DIR}/backend/." "${APP_DIR}/backend/"
-  # Restaurer le .env de production (ne jamais l'écraser)
-  cp /tmp/cave-vigne-env.bak "${APP_DIR}/backend/.env"
-  chmod 600 "${APP_DIR}/backend/.env"
-  cd "${APP_DIR}/backend"
+  section "1/3 — Dépendances backend + migration"
+  cd "${SRC_BACKEND}"
   npm install --omit=dev --quiet
   npm run migrate
-  success "Backend mis à jour + migrations exécutées"
+  success "npm install + migrations OK"
 
-  # ── Mise à jour frontend ──
   section "2/3 — Build frontend"
-  cd "${SCRIPT_DIR}/frontend"
+  cd "${SRC_FRONTEND}"
   rm -f .env.local
   echo "REACT_APP_API_URL=/api" > .env.production
   npm install --quiet
   node node_modules/vite/bin/vite.js build
+  mkdir -p "${APP_DIR}/frontend/build"
   cp -r build/. "${APP_DIR}/frontend/build/"
   success "Frontend buildé et copié"
 
-  # ── Redémarrage PM2 ──
   section "3/3 — Redémarrage PM2"
-  if pm2 list | grep -q cave-vigne-api; then
-    pm2 delete cave-vigne-api 2>/dev/null || true
-  fi
+  pm2 delete cave-vigne-api 2>/dev/null || true
   if [[ -f "${APP_DIR}/backend/ecosystem.config.js" ]]; then
-    pm2 start "${APP_DIR}/backend/ecosystem.config.js" --env production
+    cd "${APP_DIR}/backend" && pm2 start ecosystem.config.js --env production
   else
     pm2 start "${APP_DIR}/backend/src/server.js" \
       --name cave-vigne-api --cwd "${APP_DIR}/backend" \
@@ -91,10 +73,137 @@ if [[ "$UPDATE_MODE" == "true" ]]; then
   fi
   pm2 save
   success "Application redémarrée"
+}
 
-  # ── Résumé ──
+# ─── Mode GIT UPDATE ─────────────────────────────────────────────────────────
+if [[ "$GIT_MODE" == "true" ]]; then
+  section "Mise à jour depuis GitHub"
+
+  command -v git &>/dev/null || apt-get install -y -qq git
+
+  # Répertoire source git : APP_DIR si .git présent, sinon répertoire dédié
+  GIT_SRC="${APP_DIR}"
+  if [[ ! -d "${GIT_SRC}/.git" ]]; then
+    warn "Aucun dépôt git trouvé dans ${GIT_SRC}"
+    read -rp "URL du dépôt GitHub (ex: https://github.com/user/cave-vigne.git) : " REPO_URL
+    [[ -z "$REPO_URL" ]] && error "URL du dépôt obligatoire."
+    read -rp "Branche à suivre [main] : " GIT_BRANCH
+    GIT_BRANCH="${GIT_BRANCH:-main}"
+
+    info "Initialisation du suivi git dans ${GIT_SRC}…"
+    cd "${GIT_SRC}"
+    git init -q
+    git remote add origin "${REPO_URL}"
+    git fetch origin "${GIT_BRANCH}" --depth=1 -q
+    git checkout -B "${GIT_BRANCH}" "origin/${GIT_BRANCH}" -q
+    success "Dépôt git configuré (remote: ${REPO_URL}, branche: ${GIT_BRANCH})"
+  fi
+
+  cd "${GIT_SRC}"
+  GIT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "main")
+
+  info "Vérification des mises à jour (branche: ${GIT_BRANCH})…"
+  git fetch origin "${GIT_BRANCH}" -q 2>/dev/null \
+    || error "Impossible de contacter GitHub — réseau disponible ?"
+
+  LOCAL_SHA=$(git rev-parse HEAD)
+  REMOTE_SHA=$(git rev-parse "origin/${GIT_BRANCH}" 2>/dev/null || echo "")
+
+  if [[ "$LOCAL_SHA" == "$REMOTE_SHA" ]]; then
+    success "Déjà à jour — commit local : $(git rev-parse --short HEAD)"
+    echo ""
+    pm2 status
+    exit 0
+  fi
+
+  BEHIND=$(git rev-list HEAD.."origin/${GIT_BRANCH}" --count 2>/dev/null || echo "?")
+  echo ""
+  echo -e "${BOLD}${BLUE}  En retard de ${BEHIND} commit(s) :${NC}"
+  echo ""
+  git log HEAD.."origin/${GIT_BRANCH}" --oneline \
+    --format="  %C(yellow)%h%Creset %s %C(dim)(%cr, %an)%Creset" 2>/dev/null \
+    || git log HEAD.."origin/${GIT_BRANCH}" --oneline | sed 's/^/  /'
+  echo ""
+
+  echo -e "${BOLD}  Fichiers modifiés :${NC}"
+  git diff --name-status HEAD "origin/${GIT_BRANCH}" \
+    | awk '
+        /^A/ { printf "  \033[32m[+] AJOUTÉ   \033[0m %s\n", $2 }
+        /^M/ { printf "  \033[33m[~] MODIFIÉ  \033[0m %s\n", $2 }
+        /^D/ { printf "  \033[31m[-] SUPPRIMÉ \033[0m %s\n", $2 }
+        /^R/ { printf "  \033[34m[>] RENOMMÉ  \033[0m %s → %s\n", $2, $3 }
+      '
+  echo ""
+
+  read -rp "Appliquer ces ${BEHIND} mise(s) à jour ? [o/N] " CONFIRM_GIT
+  [[ "$CONFIRM_GIT" =~ ^[oO]$ ]] || { info "Annulé."; exit 0; }
+
+  # ── Sauvegarde .env ──
+  [[ -f "${APP_DIR}/backend/.env" ]] && cp "${APP_DIR}/backend/.env" /tmp/cave-vigne-env.bak
+
+  # ── Pull ──
+  section "Téléchargement des modifications"
+  git pull origin "${GIT_BRANCH}" --ff-only -q 2>/dev/null || {
+    warn "Fast-forward impossible (commits locaux ?). Tentative avec stash + pull…"
+    git stash -q 2>/dev/null || true
+    git pull origin "${GIT_BRANCH}" -q
+  }
+  success "Code mis à jour → $(git rev-parse --short HEAD)"
+
+  # ── Restaurer .env (git pull ne doit jamais l'écraser) ──
+  if [[ -f /tmp/cave-vigne-env.bak ]]; then
+    cp /tmp/cave-vigne-env.bak "${APP_DIR}/backend/.env"
+    chmod 600 "${APP_DIR}/backend/.env"
+    success ".env de production restauré"
+  fi
+
+  # ── Lire le domaine ──
+  DOMAIN=$(grep "^API_URL=" "${APP_DIR}/backend/.env" 2>/dev/null \
+    | sed 's|.*://||;s|/.*||' || true)
+  [[ -z "$DOMAIN" ]] && { read -rp "Domaine (ex: cavevigne.fr) : " DOMAIN; }
+
+  do_update_steps "${GIT_SRC}/backend" "${GIT_SRC}/frontend"
+
+  section "Mise à jour GitHub terminée ✓"
+  PROTO=$(grep "^API_URL=" "${APP_DIR}/backend/.env" | sed 's|API_URL=||;s|://.*||' || echo "https")
+  echo ""
+  echo -e "  ${GREEN}Application${NC} : ${PROTO}://${DOMAIN}"
+  echo -e "  ${GREEN}API health${NC}  : ${PROTO}://${DOMAIN}/api/health"
+  echo -e "  ${GREEN}Commit${NC}      : $(git -C "${GIT_SRC}" log -1 --format='%h — %s (%cr)')"
+  echo -e "  ${GREEN}Logs PM2${NC}    : pm2 logs cave-vigne-api"
+  echo ""
+  pm2 status
+  exit 0
+fi
+
+# ─── Mode UPDATE (copie locale) ───────────────────────────────────────────────
+if [[ "$UPDATE_MODE" == "true" ]]; then
+  section "Mise à jour Cave & Vigne (copie locale)"
+
+  DOMAIN=$(grep "^API_URL=" "${APP_DIR}/backend/.env" 2>/dev/null \
+    | sed 's|.*://||;s|/.*||' || true)
+  [[ -z "$DOMAIN" ]] && { read -rp "Domaine (ex: cavevigne.fr) : " DOMAIN; }
+
+  echo ""
+  info "Domaine   : $DOMAIN"
+  info "App dir   : $APP_DIR"
+  info "Source    : $SCRIPT_DIR"
+  echo ""
+  read -rp "Confirmer la mise à jour ? [o/N] " CONFIRM
+  [[ "$CONFIRM" =~ ^[oO]$ ]] || { info "Annulé."; exit 0; }
+
+  # ── Copie backend (protège .env) ──
+  section "Copie du backend"
+  cp "${APP_DIR}/backend/.env" /tmp/cave-vigne-env.bak
+  cp -r "${SCRIPT_DIR}/backend/." "${APP_DIR}/backend/"
+  cp /tmp/cave-vigne-env.bak "${APP_DIR}/backend/.env"
+  chmod 600 "${APP_DIR}/backend/.env"
+  success "Backend copié"
+
+  do_update_steps "${APP_DIR}/backend" "${SCRIPT_DIR}/frontend"
+
   section "Mise à jour terminée ✓"
-  PROTO=$(grep "^API_URL=" "${APP_DIR}/backend/.env" | cut -d= -f2 | sed 's|://.*||' || echo "https")
+  PROTO=$(grep "^API_URL=" "${APP_DIR}/backend/.env" | sed 's|API_URL=||;s|://.*||' || echo "https")
   echo ""
   echo -e "  ${GREEN}Application${NC} : ${PROTO}://${DOMAIN}"
   echo -e "  ${GREEN}API health${NC}  : ${PROTO}://${DOMAIN}/api/health"
