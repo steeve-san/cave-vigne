@@ -346,7 +346,7 @@ Laisse un champ null si tu n'es pas certain. Ne retourne QUE le JSON.`;
 
 // ─── GET /api/wines/barcode/:ean ──────────────────────────────────────────────
 // Lookup chain: 1) local barcode_cache  2) Open Food Facts API  3) web scrapers
-const { scrapeWineByEan, scrapeWineByName, vivinoSearch } = require('../services/wineScraper');
+const { scrapeWineByEan, vivinoSearch } = require('../services/wineScraper');
 
 router.get('/barcode/:ean', auth, async (req, res) => {
   const { ean } = req.params;
@@ -434,115 +434,108 @@ router.get('/value-history', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
-// ─── GET /api/wines/:id/enrich — enrichissement multi-sources ────────────────
-// Sources: Vivino API → Open Food Facts → Vinatis scraper → La Revue du Vin de France
-const cheerio = require('cheerio');
-
-async function scrapeVinatis(query) {
-  try {
-    const url = `https://www.vinatis.com/recherche?q=${encodeURIComponent(query)}`;
-    const resp = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'fr-FR,fr;q=0.9' },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!resp.ok) return null;
-    const $ = cheerio.load(await resp.text());
-    // Vinatis product cards
-    const card = $('.product-item, .product_item, [class*="product-card"]').first();
-    if (!card.length) return null;
-    const name    = card.find('[class*="product-name"], h2, h3').first().text().trim();
-    const producer = card.find('[class*="brand"], [class*="producer"], [class*="domaine"]').first().text().trim();
-    const priceText = card.find('[class*="price"], .price').first().text().trim();
-    const price = priceText ? parseFloat(priceText.replace(/[^\d,.]/g, '').replace(',', '.')) : null;
-    const img   = card.find('img').first().attr('src') || null;
-    if (!name) return null;
-    return { source: 'Vinatis', name, producer: producer || null, price: price || null, label_image: img || null };
-  } catch { return null; }
-}
-
-async function scrapeLRVF(query) {
-  try {
-    const url = `https://www.larvf.com/recherche/${encodeURIComponent(query)}`;
-    const resp = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'fr-FR,fr;q=0.9' },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!resp.ok) return null;
-    const $ = cheerio.load(await resp.text());
-    const card = $('[class*="wine"], [class*="vin"], .search-result, article').first();
-    if (!card.length) return null;
-    const name   = card.find('h2, h3, [class*="title"], [class*="name"]').first().text().trim();
-    const rating = card.find('[class*="note"], [class*="rating"], [class*="score"]').first().text().trim();
-    const notes  = card.find('[class*="desc"], [class*="note-text"], p').first().text().trim();
-    if (!name) return null;
-    return { source: 'La RVF', name, rating: rating || null, notes: notes?.slice(0, 200) || null };
-  } catch { return null; }
-}
+// ─── GET /api/wines/:id/enrich — enrichissement multi-sources (parallel) ──────
+// Sources: Vivino · Open Food Facts (full) · Wine-Searcher · Oeni · Liv-ex
+const {
+  openFoodFactsSearch, wineSearcherSearch, oeniSearch, livexSearch,
+  fetchAllMarketPrices,
+} = require('../services/wineScraper');
 
 router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM wines WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
     if (!rows.length) return res.status(404).json({ error: 'Vin introuvable' });
-    const wine = rows[0];
+    const wine  = rows[0];
     const query = [wine.name, wine.producer, wine.vintage].filter(Boolean).join(' ');
+
+    // Run all enrichment sources in parallel
+    const [vivinoR, offR, wsR] = await Promise.allSettled([
+      vivinoSearch(query),
+      openFoodFactsSearch(query),
+      wineSearcherSearch(wine.name, wine.vintage),
+    ]);
+
     const results = [];
 
-    // ── 1. Vivino (best structured data) ────────────────────────────────────
-    try {
-      const v = await vivinoSearch(query);
-      if (v?.name) results.push({
-        source: 'Vivino', name: v.name, producer: v.producer || null,
-        vintage: v.vintage || null, type: v.type || null,
-        region: v.region || null, country: v.country || null,
-        grapes: v.grapes || null, notes: v.notes || null,
-        label_image: v.label_url || null,
+    // ── 1. Vivino ─────────────────────────────────────────────────────────────
+    const viv = vivinoR.status === 'fulfilled' ? vivinoR.value : null;
+    if (viv?.name) {
+      results.push({
+        source:         'Vivino',
+        name:           viv.name,
+        producer:       viv.producer       || null,
+        vintage:        viv.vintage        || null,
+        type:           viv.type           || null,
+        region:         viv.region         || null,
+        appellation:    viv.appellation    || null,
+        country:        viv.country        || null,
+        grapes:         viv.grapes         || null,
+        notes:          viv.notes          || null,
+        food_pairings:  viv.food_pairings  || null,
+        flavor_profile: viv.flavor_profile || null,
+        label_image:    viv.label_url      || null,
+        rating:         viv.rating         || null,
+        ratings_count:  viv.ratings_count  || null,
+        price_avg:      viv.price_avg      || null,
+        currency:       viv.currency       || 'EUR',
       });
-    } catch { /* continue */ }
+    }
 
-    // ── 2. Open Food Facts ───────────────────────────────────────────────────
-    try {
-      const q = encodeURIComponent(query);
-      const offUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${q}&categories_tags=wines&action=process&json=1&page_size=3&fields=product_name,origins,countries_tags,brands,image_url,ingredients_text`;
-      const r = await fetch(offUrl, { signal: AbortSignal.timeout(6000) });
-      if (r.ok) {
-        const d = await r.json();
-        (d.products || []).slice(0, 2).forEach(p => {
-          if (!p.product_name) return;
-          results.push({
-            source:      'Open Food Facts',
-            name:        p.product_name,
-            producer:    p.brands || null,
-            country:     (p.countries_tags?.[0] || '').replace(/^[a-z]{2}:/, '') || null,
-            grapes:      p.ingredients_text || null,
-            label_image: p.image_url || null,
-          });
-        });
-      }
-    } catch { /* continue */ }
+    // ── 2. Open Food Facts — full fields ──────────────────────────────────────
+    const offList = (offR.status === 'fulfilled' ? offR.value : null) || [];
+    for (const p of offList.slice(0, 3)) {
+      if (!p?.name) continue;
+      results.push({
+        source:         'Open Food Facts',
+        name:           p.name,
+        producer:       p.producer       || null,
+        country:        p.country        || null,
+        region:         p.region         || null,
+        type:           p.type           || null,
+        grapes:         p.grapes         || null,
+        abv:            p.abv            || null,
+        certifications: p.certifications || null,
+        label_image:    p.label_image    || null,
+        volume_ml:      p.volume_ml      || null,
+        stores:         p.stores         || null,
+        manufacturing:  p.manufacturing  || null,
+        categories:     p.categories     || null,
+        ean:            p.ean            || null,
+      });
+    }
 
-    // ── 3. Vinatis ───────────────────────────────────────────────────────────
-    try {
-      const v = await scrapeVinatis(query);
-      if (v) results.push(v);
-    } catch { /* continue */ }
+    // ── 3. Wine-Searcher — ratings + price benchmark ──────────────────────────
+    const ws = wsR.status === 'fulfilled' ? wsR.value : null;
+    if (ws?.name) {
+      results.push({
+        source:         'Wine-Searcher',
+        name:           ws.name,
+        vintage:        ws.vintage        || null,
+        region:         ws.region         || null,
+        appellation:    ws.appellation    || null,
+        country:        ws.country        || null,
+        grapes:         ws.grapes         || null,
+        rating:         ws.rating         || null,
+        community_rating: ws.community_rating || null,
+        price_avg:      ws.price_avg      || null,
+        price_min:      ws.price_min      || null,
+        price_max:      ws.price_max      || null,
+        merchant_count: ws.merchant_count || null,
+        currency:       ws.currency       || 'EUR',
+        source_url:     ws.source_url     || null,
+      });
+    }
 
-    // ── 4. La Revue du Vin de France ─────────────────────────────────────────
-    try {
-      const v = await scrapeLRVF(query);
-      if (v) results.push(v);
-    } catch { /* continue */ }
-
-    // ── 5. Generic wine scraper (Oeni, Liv-ex fallback) ──────────────────────
+    // ── 4. Fallback if no results yet ─────────────────────────────────────────
     if (results.length === 0) {
-      try {
-        const scraped = await scrapeWineByName(wine.name, wine.producer);
-        if (scraped?.name) results.push({
-          source: scraped.source || 'Web', name: scraped.name,
-          producer: scraped.producer || null, region: scraped.region || null,
-          country: scraped.country || null, grapes: scraped.grapes || null,
-          notes: scraped.notes || null, label_image: scraped.label_url || null,
-        });
-      } catch { /* continue */ }
+      const [oeniR, livexR] = await Promise.allSettled([
+        oeniSearch(query),
+        livexSearch(query),
+      ]);
+      const oeni  = oeniR.status  === 'fulfilled' ? oeniR.value  : null;
+      const livex = livexR.status === 'fulfilled' ? livexR.value : null;
+      if (oeni?.name)  results.push({ source: oeni.source  || 'Oeni',   name: oeni.name,  producer: oeni.producer  || null, region: oeni.region  || null });
+      if (livex?.name) results.push({ source: livex.source || 'Liv-ex', name: livex.name, producer: livex.producer || null });
     }
 
     res.json({ results, query });
@@ -552,97 +545,18 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
   }
 });
 
-// ─── GET /api/wines/:id/market — recherche prix & disponibilité en ligne ───────
-// Sources : Vivino (prix moyen), Vinatis, ideedelvin.fr, WineSearcher public
+// ─── GET /api/wines/:id/market — recherche prix & disponibilité (parallel) ────
+// Sources: Vivino · Wine-Searcher · Vinatis · Millésima · Nicolas · ChateauOnline · iDéalwine
 router.get('/:id/market', auth, requireRole('user', 'admin'), async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM wines WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
     if (!rows.length) return res.status(404).json({ error: 'Vin introuvable' });
     const wine = rows[0];
-    const query = [wine.name, wine.producer, wine.vintage].filter(Boolean).join(' ');
-    const results = [];
 
-    // ── 1. Vivino public search — price data ──────────────────────────────
-    try {
-      const { data } = await require('axios').get('https://www.vivino.com/api/explore/explore', {
-        params: { q: query, language: 'fr', country_code: 'fr', per_page: 3 },
-        headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json', 'Accept-Language': 'fr-FR,fr;q=0.9' },
-        timeout: 7000,
-      });
-      const matches = data?.explore_vintage?.matches || [];
-      matches.slice(0, 3).forEach(m => {
-        const v = m.vintage;
-        const w = v?.wine;
-        const price = m.price?.amount || v?.statistics?.median_price_rounded || null;
-        if (!w?.name) return;
-        results.push({
-          source: 'Vivino',
-          source_url: `https://www.vivino.com/search/wines?q=${encodeURIComponent(query)}`,
-          name: w.name,
-          vintage: v?.year || null,
-          price_avg: price ? parseFloat(price) : null,
-          currency: m.price?.currency || 'EUR',
-          rating: v?.statistics?.wine_ratings_average || null,
-          ratings_count: v?.statistics?.ratings_count || null,
-          availability: price ? 'En ligne' : null,
-        });
-      });
-    } catch { /* continue */ }
+    // All price sources run in parallel via fetchAllMarketPrices
+    const results = await fetchAllMarketPrices(wine);
 
-    // ── 2. Vinatis — French retailer ──────────────────────────────────────
-    try {
-      const url = `https://www.vinatis.com/recherche?q=${encodeURIComponent(query)}`;
-      const resp = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'fr-FR,fr;q=0.9' },
-        signal: AbortSignal.timeout(7000),
-      });
-      if (resp.ok) {
-        const $ = cheerio.load(await resp.text());
-        $('.product-item, [class*="product-card"]').slice(0, 3).each((_i, el) => {
-          const name      = $(el).find('[class*="product-name"], h2, h3').first().text().trim();
-          const priceText = $(el).find('[class*="price"]').first().text().trim();
-          const price     = priceText ? parseFloat(priceText.replace(/[^\d,.]/g, '').replace(',', '.')) : null;
-          const inStock   = $(el).find('[class*="stock"], [class*="dispo"]').text().toLowerCase().includes('stock');
-          if (!name) return;
-          results.push({
-            source: 'Vinatis',
-            source_url: url,
-            name,
-            price_avg: price || null,
-            currency: 'EUR',
-            availability: inStock ? 'En stock' : (price ? 'Voir le site' : null),
-          });
-        });
-      }
-    } catch { /* continue */ }
-
-    // ── 3. iDéal du Vin / ideadelvin.fr ──────────────────────────────────
-    try {
-      const url = `https://www.idealwine.com/fr/recherche/index.jsp?textRecherche=${encodeURIComponent(query)}&typeRecherche=full_text`;
-      const resp = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'fr-FR,fr;q=0.9' },
-        signal: AbortSignal.timeout(7000),
-      });
-      if (resp.ok) {
-        const $ = cheerio.load(await resp.text());
-        const first = $('[class*="product"], .wine-item, article').first();
-        if (first.length) {
-          const name      = first.find('h2, h3, [class*="name"]').first().text().trim();
-          const priceText = first.find('[class*="price"], [class*="prix"]').first().text().trim();
-          const price     = priceText ? parseFloat(priceText.replace(/[^\d,.]/g, '').replace(',', '.')) : null;
-          if (name) results.push({
-            source: 'iDéalwine',
-            source_url: url,
-            name,
-            price_avg: price || null,
-            currency: 'EUR',
-            availability: price ? 'Enchères' : 'Voir le site',
-          });
-        }
-      }
-    } catch { /* continue */ }
-
-    res.json({ results, query, wine: { name: wine.name, vintage: wine.vintage, producer: wine.producer } });
+    res.json({ results, query: [wine.name, wine.producer, wine.vintage].filter(Boolean).join(' '), wine: { name: wine.name, vintage: wine.vintage, producer: wine.producer } });
   } catch (err) {
     console.error('[market]', err.message);
     res.status(500).json({ error: 'Erreur serveur' });
