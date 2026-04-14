@@ -3,7 +3,7 @@ const router = require('express').Router();
 const db = require('../config/db');
 const auth = require('../middleware/auth');
 const { cacheGet, cacheSet } = require('../config/redis');
-const { callAI, callAIVision, checkAIAvailable } = require('../config/ai');
+const { callAI, callAIVision, checkAIAvailable, getAIConfig } = require('../config/ai');
 const multer = require('multer');
 const sharp = require('sharp');
 
@@ -356,17 +356,17 @@ Réponds en JSON:
 
 // GET /api/sommelier/providers — list available providers and current config
 router.get('/providers', auth, async (req, res) => {
-  const { getAIConfig } = require('../config/ai');
   try {
-    const cfg = await getAIConfig();
-    const provider = cfg.ai_provider || 'anthropic';
+    const [cfg, availability] = await Promise.all([getAIConfig(), checkAIAvailable()]);
+    const configured = cfg.ai_provider || 'anthropic';
     const providers = [
       { id: 'anthropic', name: 'Claude (Anthropic)', configured: !!(process.env.ANTHROPIC_API_KEY || cfg.anthropic_key) },
       { id: 'openai',    name: 'ChatGPT (OpenAI)',   configured: !!(process.env.OPENAI_API_KEY    || cfg.openai_key) },
       { id: 'mistral',   name: 'Mistral AI',         configured: !!(process.env.MISTRAL_API_KEY   || cfg.mistral_key) },
       { id: 'openwebui', name: 'OpenWebUI / Ollama', configured: !!(cfg.openwebui_url) },
     ];
-    res.json({ current: provider, providers });
+    // `current` = effective provider after fallback logic; `configured` = DB setting
+    res.json({ current: availability.provider, configured, providers });
   } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
 });
 

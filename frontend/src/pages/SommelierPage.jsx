@@ -87,9 +87,13 @@ export default function SommelierPage() {
                   <div style={{ fontSize:'0.8rem', color:'var(--cv-text2)' }}>Décrivez l'occasion et l'IA choisit le vin idéal depuis votre cave</div>
                 </div>
                 {providerInfo && (
-                  <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginLeft: 'auto', flexShrink: 0 }}>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginLeft: 'auto', flexShrink: 0, textAlign: 'right' }}>
                     <i className={`bi ${PROVIDER_ICONS[providerInfo.current] || 'bi-cpu'} me-1`} style={{ color: 'var(--cv-gold)' }}></i>
                     {PROVIDER_LABELS[providerInfo.current] || providerInfo.current}
+                    {providerInfo.configured && providerInfo.configured !== providerInfo.current && (
+                      <span title={`Configuré : ${PROVIDER_LABELS[providerInfo.configured] || providerInfo.configured} (clé manquante — fallback Anthropic)`}
+                        style={{ marginLeft: 4, color: '#f59e0b', cursor: 'help' }}>⚠</span>
+                    )}
                   </div>
                 )}
               </div>
@@ -272,6 +276,10 @@ export default function SommelierPage() {
                 <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', textAlign: 'right', flexShrink: 0 }}>
                   <i className={`bi ${PROVIDER_ICONS[providerInfo.current] || 'bi-cpu'} me-1`} style={{ color: 'var(--cv-gold)' }}></i>
                   {PROVIDER_LABELS[providerInfo.current] || providerInfo.current}
+                  {providerInfo.configured && providerInfo.configured !== providerInfo.current && (
+                    <span title={`Configuré : ${PROVIDER_LABELS[providerInfo.configured] || providerInfo.configured} (clé manquante — fallback Anthropic)`}
+                      style={{ marginLeft: 4, color: '#f59e0b', cursor: 'help' }}>⚠</span>
+                  )}
                 </div>
               )}
             </div>
