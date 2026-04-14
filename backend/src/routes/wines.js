@@ -459,10 +459,10 @@ router.get('/value-history', auth, async (req, res) => {
 });
 
 // ─── GET /api/wines/:id/enrich — enrichissement multi-sources (parallel) ──────
-// Sources: Vivino · Open Food Facts (full) · Wine-Searcher · Oeni · Liv-ex
+// Sources: Vivino · Open Food Facts · Wine-Searcher · iDéalwine · Vinatis · Oeni · Liv-ex
 const {
   openFoodFactsSearch, wineSearcherSearch, oeniSearch, livexSearch,
-  fetchAllMarketPrices, scoreRelevance,
+  fetchAllMarketPrices, scoreRelevance, idealwineScrape, vinatisScrape,
 } = require('../services/wineScraper');
 
 // Download an image from URL and save to uploads/labels — returns relative path or null
@@ -518,10 +518,13 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), enrichLimiter, asy
     const queryViv  = wine.name;
 
     // Run all enrichment sources in parallel
-    const [vivinoR, offR, wsR] = await Promise.allSettled([
+    const queryIdeal = [wine.name, wine.vintage].filter(Boolean).join(' ');
+    const [vivinoR, offR, wsR, idealR, vinatisR] = await Promise.allSettled([
       vivinoSearch(queryViv, wine.type),
       openFoodFactsSearch(query),
       wineSearcherSearch(wine.name, wine.vintage),
+      idealwineScrape(queryIdeal),
+      vinatisScrape(queryIdeal),
     ]);
 
     const results = [];
@@ -606,7 +609,32 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), enrichLimiter, asy
       });
     }
 
-    // ── 4. Fallback if no results yet ─────────────────────────────────────────
+    // ── 4. iDéalwine + Vinatis — price + name when above sources missed ────────
+    const ideal   = idealR.status   === 'fulfilled' ? idealR.value   : null;
+    const vinatis = vinatisR.status === 'fulfilled' ? vinatisR.value : null;
+    if (ideal?.name && scoreRelevance(ideal.name, wine.name) >= 0.2) {
+      results.push({
+        source:      'iDéalwine',
+        name:        ideal.name,
+        price_avg:   ideal.price_avg   || null,
+        currency:    ideal.currency    || 'EUR',
+        source_url:  ideal.source_url  || null,
+        availability: ideal.availability || null,
+      });
+    }
+    if (vinatis?.name && scoreRelevance(vinatis.name, wine.name) >= 0.2) {
+      results.push({
+        source:      'Vinatis',
+        name:        vinatis.name,
+        price_avg:   vinatis.price_avg  || null,
+        currency:    vinatis.currency   || 'EUR',
+        label_image: vinatis.label_image || null,
+        source_url:  vinatis.source_url  || null,
+        availability: vinatis.availability || null,
+      });
+    }
+
+    // ── 5. Fallback if no results yet ─────────────────────────────────────────
     if (results.length === 0) {
       const [oeniR, livexR] = await Promise.allSettled([
         oeniSearch(query),

@@ -158,14 +158,57 @@ async function upcItemDbLookup(ean) {
 /** Map our wine type → Vivino wine_type_id for filtering */
 const VIVINO_TYPE_IDS = { rouge: 1, blanc: 2, rosé: 3, pétillant: 7, petillant: 7 };
 
+/** Build a structured result from a Vivino match object (shared by API + HTML paths) */
+function _vivinoPickBest(matches, query) {
+  let best = matches[0];
+  let bestScore = 0;
+  for (const candidate of matches) {
+    const candidateName = candidate.vintage?.wine?.name || '';
+    const s = scoreRelevance(candidateName, query);
+    if (s > bestScore) { bestScore = s; best = candidate; }
+  }
+  if (bestScore < 0.2) return null;
+
+  const m         = best;
+  const vintage   = m.vintage;
+  const wine      = vintage?.wine;
+  const winery    = wine?.winery;
+  const stats     = vintage?.statistics || {};
+  const style     = wine?.style || {};
+  const priceData = m.price || {};
+
+  return {
+    source:        'Vivino',
+    name:          wine?.name || null,
+    producer:      winery?.name || null,
+    vintage:       vintage?.year || null,
+    type:          mapVivinoType(wine?.type_id),
+    region:        wine?.region?.name || null,
+    country:       wine?.region?.country?.name || null,
+    appellation:   wine?.appelation?.name || null,
+    grapes:        (style?.grapes || []).map(g => g.name).join(', ') || null,
+    food_pairings: (style?.food || []).map(f => f.name).join(', ') || null,
+    notes:         style?.description || null,
+    flavor_profile:(style?.flavor_group || []).map(f => f.primary_flavor).join(', ') || null,
+    label_url:     vintage?.image?.location ? `https:${vintage.image.location}` : null,
+    rating:        stats.wine_ratings_average ? parseFloat(stats.wine_ratings_average).toFixed(1) : null,
+    ratings_count: stats.ratings_count || null,
+    price_avg:     priceData.amount ? parseFloat(priceData.amount) : (stats.median_price_rounded ? parseFloat(stats.median_price_rounded) : null),
+    price_min:     stats.min_price ? parseFloat(stats.min_price) : null,
+    price_max:     stats.max_price ? parseFloat(stats.max_price) : null,
+    currency:      priceData.currency || 'EUR',
+  };
+}
+
 async function vivinoSearch(query, wineType) {
+  const typeId = wineType ? VIVINO_TYPE_IDS[wineType?.toLowerCase()] : null;
+
+  // ── Attempt 1: Undocumented JSON API (fast path) ──────────────────────────
   try {
     const params = {
       q: query, language: 'fr', country_code: 'fr',
       min_rating: 1, per_page: 7,
-      // No order_by → Vivino defaults to relevance/match ranking
     };
-    const typeId = wineType ? VIVINO_TYPE_IDS[wineType.toLowerCase()] : null;
     if (typeId) params['wine_type_ids[]'] = typeId;
 
     const { data } = await axios.get('https://www.vivino.com/api/explore/explore', {
@@ -175,54 +218,62 @@ async function vivinoSearch(query, wineType) {
         Accept: 'application/json',
         Referer: `https://www.vivino.com/search/wines?q=${encodeURIComponent(query)}`,
         'X-Requested-With': 'XMLHttpRequest',
+        'sec-fetch-site': 'same-origin',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-dest': 'empty',
       },
       timeout: TIMEOUT,
     });
 
-    const matches = data?.explore_vintage?.matches;
-    if (!matches?.length) return null;
-
-    // Pick the best-matching result by name relevance (not just ratings_count)
-    let best = matches[0];
-    let bestScore = 0;
-    for (const candidate of matches) {
-      const candidateName = candidate.vintage?.wine?.name || '';
-      const s = scoreRelevance(candidateName, query);
-      if (s > bestScore) { bestScore = s; best = candidate; }
+    // Guard against Cloudflare HTML challenge being returned as 200
+    if (typeof data === 'object') {
+      const matches = data?.explore_vintage?.matches;
+      if (matches?.length) return _vivinoPickBest(matches, query);
     }
-    // If no candidate scores above threshold, skip Vivino entirely
-    if (bestScore < 0.2) return null;
+  } catch { /* fall through to HTML fallback */ }
 
-    const m       = best;
-    const vintage = m.vintage;
-    const wine    = vintage?.wine;
-    const winery  = wine?.winery;
-    const stats   = vintage?.statistics || {};
-    const style   = wine?.style || {};
-    const priceData = m.price || {};
+  // ── Attempt 2: Search results page → __NEXT_DATA__ ───────────────────────
+  try {
+    const { data: html } = await axios.get('https://www.vivino.com/search/wines', {
+      params: { q: query },
+      headers: {
+        ...HEADERS,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-User': '?1',
+        'Sec-Fetch-Dest': 'document',
+      },
+      timeout: TIMEOUT,
+    });
 
-    return {
-      source:           'Vivino',
-      name:             wine?.name || null,
-      producer:         winery?.name || null,
-      vintage:          vintage?.year || null,
-      type:             mapVivinoType(wine?.type_id),
-      region:           wine?.region?.name || null,
-      country:          wine?.region?.country?.name || null,
-      appellation:      wine?.appelation?.name || null,
-      grapes:           (style?.grapes || []).map(g => g.name).join(', ') || null,
-      food_pairings:    (style?.food || []).map(f => f.name).join(', ') || null,
-      notes:            style?.description || null,
-      flavor_profile:   (style?.flavor_group || []).map(f => f.primary_flavor).join(', ') || null,
-      label_url:        vintage?.image?.location ? `https:${vintage.image.location}` : null,
-      rating:           stats.wine_ratings_average ? parseFloat(stats.wine_ratings_average).toFixed(1) : null,
-      ratings_count:    stats.ratings_count || null,
-      price_avg:        priceData.amount ? parseFloat(priceData.amount) : (stats.median_price_rounded ? parseFloat(stats.median_price_rounded) : null),
-      price_min:        stats.min_price ? parseFloat(stats.min_price) : null,
-      price_max:        stats.max_price ? parseFloat(stats.max_price) : null,
-      currency:         priceData.currency || 'EUR',
-    };
-  } catch { return null; }
+    const $ = cheerio.load(html);
+    const nd = extractNextData($);
+
+    // Vivino embeds the same match structure in __NEXT_DATA__ for SSR
+    const matches = nd?.props?.pageProps?.explorationResult?.matches
+      || nd?.props?.pageProps?.results?.matches
+      || nd?.props?.pageProps?.matches;
+
+    if (matches?.length) return _vivinoPickBest(matches, query);
+
+    // JSON-LD fallback (Vivino emits Product LD on wine pages)
+    for (const ld of extractAllJsonLd($)) {
+      const items = ld?.itemListElement || (Array.isArray(ld) ? ld : [ld]);
+      const first = items?.[0]?.item || items?.[0];
+      if (first?.name && scoreRelevance(first.name, query) >= 0.2) {
+        return {
+          source:    'Vivino',
+          name:      first.name,
+          label_url: Array.isArray(first.image) ? first.image[0] : (first.image || null),
+          rating:    first.aggregateRating?.ratingValue ? parseFloat(first.aggregateRating.ratingValue) : null,
+        };
+      }
+    }
+  } catch { /* both attempts failed */ }
+
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -911,6 +962,7 @@ module.exports = {
   // Wine enrichment
   scrapeWineByEan, scrapeWineByName, vivinoSearch,
   openFoodFactsSearch, openFoodFactsByEan, wineSearcherSearch,
+  oeniSearch, livexSearch,
   // Wine market prices
   fetchAllMarketPrices,
   vinatisScrape, millesimaScrape, nicolasScrape, chateauOnlineScrape, idealwineScrape,
