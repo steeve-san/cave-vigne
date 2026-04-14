@@ -48,15 +48,15 @@ do_update_steps() {
 
   section "1/3 — Dépendances backend + migration"
   cd "${SRC_BACKEND}"
-  npm install --omit=dev --quiet
+  npm ci --omit=dev --quiet --fund=false --audit=false
   npm run migrate
-  success "npm install + migrations OK"
+  success "npm ci + migrations OK"
 
   section "2/3 — Build frontend"
   cd "${SRC_FRONTEND}"
   rm -f .env.local
   echo "REACT_APP_API_URL=/api" > .env.production
-  npm install --quiet
+  npm ci --quiet --fund=false --audit=false
   node node_modules/vite/bin/vite.js build
   mkdir -p "${APP_DIR}/frontend/build"
   cp -r build/. "${APP_DIR}/frontend/build/"
@@ -545,7 +545,7 @@ chmod 600 "${APP_DIR}/backend/.env"
 success ".env backend généré"
 
 cd "${APP_DIR}/backend"
-npm install --omit=dev --quiet
+npm ci --omit=dev --quiet --fund=false --audit=false
 npm run migrate
 success "Dépendances backend installées + migration DB"
 
@@ -558,7 +558,7 @@ rm -f .env.local
 cat > .env.production <<FENV
 REACT_APP_API_URL=/api
 FENV
-npm install --quiet
+npm ci --quiet --fund=false --audit=false
 node node_modules/vite/bin/vite.js build
 cp -r build/. "${APP_DIR}/frontend/build/"
 success "Frontend buildé et copié"
