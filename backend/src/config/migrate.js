@@ -335,6 +335,12 @@ async function migrate() {
     ['openwebui_url', 'http://localhost:11434','text','URL OpenWebUI / Ollama'],
     ['openwebui_key', '',   'text',    'API Key OpenWebUI (optionnel)'],
     ['openwebui_model','llama3','text', 'Modèle OpenWebUI / Ollama'],
+    // Media integrations (TMDB, Plex, Ombi)
+    ['tmdb_api_key',  '',   'password','Clé API TMDB (The Movie Database)'],
+    ['plex_url',      '',   'text',    'URL Plex Media Server (ex: http://192.168.1.10:32400)'],
+    ['plex_token',    '',   'password','Token Plex (X-Plex-Token)'],
+    ['ombi_url',      '',   'text',    'URL Ombi (ex: http://192.168.1.10:5000)'],
+    ['ombi_key',      '',   'password','Clé API Ombi'],
   ];
   for (const [key, val, type, label] of defaults) {
     await conn.query(

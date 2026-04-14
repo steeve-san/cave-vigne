@@ -231,6 +231,63 @@ function SettingsTab() {
         </div>
       </div>
 
+      {/* Media integrations */}
+      <div className="col-12">
+        <div className="card">
+          <div className="card-header">
+            <h6 className="card-title mb-0"><i className="bi bi-film me-2" style={{ color: '#a855f7' }} />Intégrations média (Soirée cinéma / série)</h6>
+          </div>
+          <div className="card-body">
+            <div className="row g-3">
+              <div className="col-12">
+                <div style={{ fontSize: '0.78rem', color: 'var(--cv-text3)', padding: '8px 12px', background: 'var(--cv-bg2)', borderRadius: 6, marginBottom: 8 }}>
+                  <i className="bi bi-info-circle me-1" style={{ color: '#a855f7' }}></i>
+                  Quand l'occasion est "soirée cinéma" ou "soirée série", le sommelier récupère les films/séries en cours
+                  depuis les services configurés pour personnaliser sa recommandation.
+                </div>
+              </div>
+              {/* TMDB */}
+              <div className="col-12">
+                <div style={{ fontSize: '0.75rem', color: '#a855f7', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>TMDB — The Movie Database</div>
+              </div>
+              <div className="col-12">
+                <label className="form-label">Clé API TMDB</label>
+                <input type="password" className="form-control" placeholder={isSet('tmdb_api_key') ? '••••••••• (configuré)' : 'Clé API TMDB (gratuite sur themoviedb.org)'}
+                  value={get('tmdb_api_key')} onChange={set('tmdb_api_key')} />
+              </div>
+              {/* Plex */}
+              <div className="col-12 mt-2">
+                <div style={{ fontSize: '0.75rem', color: '#a855f7', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Plex Media Server</div>
+              </div>
+              <div className="col-md-8">
+                <label className="form-label">URL Plex</label>
+                <input className="form-control" placeholder="http://192.168.1.10:32400"
+                  value={get('plex_url')} onChange={set('plex_url')} />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">X-Plex-Token</label>
+                <input type="password" className="form-control" placeholder={isSet('plex_token') ? '••••••••• (configuré)' : 'Token Plex'}
+                  value={get('plex_token')} onChange={set('plex_token')} />
+              </div>
+              {/* Ombi */}
+              <div className="col-12 mt-2">
+                <div style={{ fontSize: '0.75rem', color: '#a855f7', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Ombi</div>
+              </div>
+              <div className="col-md-8">
+                <label className="form-label">URL Ombi</label>
+                <input className="form-control" placeholder="http://192.168.1.10:5000"
+                  value={get('ombi_url')} onChange={set('ombi_url')} />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Clé API Ombi</label>
+                <input type="password" className="form-control" placeholder={isSet('ombi_key') ? '••••••••• (configuré)' : 'Clé API Ombi'}
+                  value={get('ombi_key')} onChange={set('ombi_key')} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Bouton save */}
       <div className="col-12 d-flex justify-content-end">
         <button className="btn btn-gold" onClick={() => saveMut.mutate(vals)} disabled={saveMut.isPending}>

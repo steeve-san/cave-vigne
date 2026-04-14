@@ -114,6 +114,14 @@ export default function SommelierPage() {
                 {['Apéritif entre amis','Dîner romantique','Repas de fête','Soirée dégustation','Cuisine italienne','Barbecue estival'].map(c => (
                   <button key={c} className="filter-pill" onClick={() => setTonightForm(f => ({ ...f, occasion: c }))}>{c}</button>
                 ))}
+                <button className="filter-pill" style={{ borderColor: 'rgba(139,26,200,0.4)' }}
+                  onClick={() => setTonightForm(f => ({ ...f, occasion: 'Soirée cinéma 🎬' }))}>
+                  🎬 Soirée cinéma
+                </button>
+                <button className="filter-pill" style={{ borderColor: 'rgba(139,26,200,0.4)' }}
+                  onClick={() => setTonightForm(f => ({ ...f, occasion: 'Soirée série TV 📺' }))}>
+                  📺 Soirée série
+                </button>
               </div>
               <button className="btn btn-gold px-4" onClick={() => tonightMut.mutate(tonightForm)}
                 disabled={tonightMut.isPending}>
@@ -126,8 +134,51 @@ export default function SommelierPage() {
           {tonightMut.isPending && (
             <div className="col-12"><div className="card p-4 text-center">
               <div className="spinner-border mx-auto mb-3" style={{ color:'var(--cv-gold)', width:'2.5rem', height:'2.5rem' }} />
-              <div style={{ color:'var(--cv-text2)', fontStyle:'italic', fontFamily:'Cormorant Garamond,serif', fontSize:'1.1rem' }}>Le sommelier consulte votre cave…</div>
+              <div style={{ color:'var(--cv-text2)', fontStyle:'italic', fontFamily:'Cormorant Garamond,serif', fontSize:'1.1rem' }}>
+                {/cinéma|série|tv|film/i.test(tonightForm.occasion)
+                  ? 'Le sommelier consulte votre cave et les écrans du moment…'
+                  : 'Le sommelier consulte votre cave…'}
+              </div>
             </div></div>
+          )}
+
+          {tonightResult && !tonightMut.isPending && tonightResult._media?.length > 0 && (
+            <div className="col-12 fade-in">
+              <div className="card" style={{ borderColor: 'rgba(139,26,200,0.25)', background: 'rgba(30,10,40,0.6)' }}>
+                <div className="card-header" style={{ borderColor: 'rgba(139,26,200,0.25)' }}>
+                  <h6 className="card-title mb-0" style={{ color: 'var(--cv-text2)', fontSize: '0.82rem' }}>
+                    <i className="bi bi-film me-2" style={{ color: '#a855f7' }} />
+                    Contexte média utilisé pour la recommandation
+                  </h6>
+                </div>
+                <div className="card-body p-3">
+                  {tonightResult._media.map((src, i) => (
+                    <div key={i} className="mb-2">
+                      <div style={{ fontSize: '0.7rem', color: '#a855f7', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                        {src.source}
+                      </div>
+                      {src.source === 'TMDB' ? (
+                        <div className="d-flex flex-wrap gap-1">
+                          {[...(src.movies || []), ...(src.shows || [])].map((m, j) => (
+                            <span key={j} style={{ fontSize: '0.75rem', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.25)', borderRadius: 4, padding: '2px 8px', color: 'var(--cv-text)' }}>
+                              {m.title}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="d-flex flex-wrap gap-1">
+                          {(src.items || []).map((m, j) => (
+                            <span key={j} style={{ fontSize: '0.75rem', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.25)', borderRadius: 4, padding: '2px 8px', color: 'var(--cv-text)' }}>
+                              {m.title}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           )}
 
           {tonightResult && !tonightMut.isPending && (

@@ -9,6 +9,77 @@ const sharp = require('sharp');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10485760 } });
 
+// ─── Media context helper — fetch now-playing/trending from TMDB, Plex or Ombi ─
+const axios = require('axios');
+
+const MEDIA_OCCASIONS = ['cinéma', 'cinema', 'film', 'série', 'serie', 'tv', 'netflix', 'movie', 'movies', 'soirée cinéma', 'soirée série', 'soirée film'];
+
+function isMediaOccasion(text = '') {
+  const low = text.toLowerCase();
+  return MEDIA_OCCASIONS.some(kw => low.includes(kw));
+}
+
+async function getSetting(key) {
+  try {
+    const [[row]] = await db.query('SELECT setting_value FROM system_settings WHERE setting_key=?', [key]);
+    return row?.setting_value || '';
+  } catch { return ''; }
+}
+
+async function fetchMediaContext() {
+  const results = [];
+
+  // ── TMDB ───────────────────────────────────────────────────────────────────
+  const tmdbKey = await getSetting('tmdb_api_key');
+  if (tmdbKey) {
+    try {
+      const [movies, shows] = await Promise.all([
+        axios.get('https://api.themoviedb.org/3/movie/now_playing', {
+          params: { api_key: tmdbKey, language: 'fr-FR', page: 1 }, timeout: 5000,
+        }),
+        axios.get('https://api.themoviedb.org/3/tv/on_the_air', {
+          params: { api_key: tmdbKey, language: 'fr-FR', page: 1 }, timeout: 5000,
+        }),
+      ]);
+      const topMovies = (movies.data.results || []).slice(0, 3).map(m => ({
+        title: m.title, genre_ids: m.genre_ids, overview: m.overview?.slice(0, 80),
+      }));
+      const topShows = (shows.data.results || []).slice(0, 3).map(s => ({
+        title: s.name, genre_ids: s.genre_ids, overview: s.overview?.slice(0, 80),
+      }));
+      if (topMovies.length) results.push({ source: 'TMDB', movies: topMovies, shows: topShows });
+    } catch (e) { console.warn('[sommelier/media] TMDB error:', e.message); }
+  }
+
+  // ── Plex ──────────────────────────────────────────────────────────────────
+  const [plexUrl, plexToken] = await Promise.all([getSetting('plex_url'), getSetting('plex_token')]);
+  if (plexUrl && plexToken) {
+    try {
+      const r = await axios.get(`${plexUrl}/library/recentlyAdded`, {
+        headers: { 'X-Plex-Token': plexToken, Accept: 'application/json' }, timeout: 5000,
+      });
+      const items = (r.data?.MediaContainer?.Metadata || []).slice(0, 5).map(m => ({
+        title: m.title, type: m.type, year: m.year, summary: m.summary?.slice(0, 60),
+      }));
+      if (items.length) results.push({ source: 'Plex', items });
+    } catch (e) { console.warn('[sommelier/media] Plex error:', e.message); }
+  }
+
+  // ── Ombi ──────────────────────────────────────────────────────────────────
+  const [ombiUrl, ombiKey] = await Promise.all([getSetting('ombi_url'), getSetting('ombi_key')]);
+  if (ombiUrl && ombiKey) {
+    try {
+      const r = await axios.get(`${ombiUrl}/api/v1/Request/movie/available`, {
+        headers: { ApiKey: ombiKey }, timeout: 5000,
+      });
+      const items = (r.data || []).slice(0, 5).map(m => ({ title: m.title, year: m.releaseDate?.slice(0, 4) }));
+      if (items.length) results.push({ source: 'Ombi', items });
+    } catch (e) { console.warn('[sommelier/media] Ombi error:', e.message); }
+  }
+
+  return results;
+}
+
 // POST /api/sommelier/accord — food/wine pairing from cellar
 router.post('/accord', auth, async (req, res) => {
   const { ok, provider, error } = await checkAIAvailable();
@@ -190,11 +261,14 @@ router.post('/recommend', auth, async (req, res) => {
 
   const { occasion, guests, mood } = req.body;
   try {
-    const [wines] = await db.query(
-      `SELECT name, type, vintage, appellation, grapes, region, country, keep_until
-       FROM wines WHERE user_id=? AND is_drunk=0 AND quantity>0 ORDER BY RAND() LIMIT 40`,
-      [req.user.id]
-    );
+    const [[wines], mediaCtx] = await Promise.all([
+      db.query(
+        `SELECT name, type, vintage, appellation, grapes, region, country, keep_until
+         FROM wines WHERE user_id=? AND is_drunk=0 AND quantity>0 ORDER BY RAND() LIMIT 40`,
+        [req.user.id]
+      ),
+      isMediaOccasion(occasion) ? fetchMediaContext() : Promise.resolve([]),
+    ]);
     if (!wines.length) return res.status(404).json({ error: 'Cave vide' });
 
     const now = new Date().getFullYear();
@@ -208,8 +282,23 @@ router.post('/recommend', auth, async (req, res) => {
       mood     ? `Envie: ${mood}`        : '',
     ].filter(Boolean).join(', ');
 
+    // Build media context block for the prompt
+    let mediaBlock = '';
+    if (mediaCtx.length) {
+      mediaBlock = '\n\nContexte média (ce qui est actuellement en salle / sur les écrans) :\n';
+      for (const src of mediaCtx) {
+        if (src.source === 'TMDB') {
+          if (src.movies?.length) mediaBlock += `Films en salle (TMDB): ${src.movies.map(m => m.title).join(', ')}\n`;
+          if (src.shows?.length)  mediaBlock += `Séries en cours (TMDB): ${src.shows.map(s => s.title).join(', ')}\n`;
+        } else {
+          mediaBlock += `${src.source}: ${(src.items || []).map(i => i.title).join(', ')}\n`;
+        }
+      }
+      mediaBlock += 'Utilise ce contexte pour personnaliser ta recommandation (ambiance du film/série, genres, ton).\n';
+    }
+
     const prompt = `Tu es un sommelier passionné. Aide-moi à choisir quoi ouvrir ce soir.
-${ctx ? `Contexte: ${ctx}\n` : ''}Cave disponible:\n${caveList}
+${ctx ? `Contexte: ${ctx}\n` : ''}${mediaBlock}Cave disponible:\n${caveList}
 
 Réponds UNIQUEMENT en JSON valide:
 {"recommendation":{"name":"nom exact du vin en cave","type":"rouge|blanc|rosé|pétillant","why":"explication enthousiaste 2-3 phrases","temp":"température de service idéale","decant":"oui|non|recommandé","food":"suggestion d'accord mets/vin"},"alternatives":[{"name":"...","why":"..."}],"conseil_ambiance":"conseil court pour la soirée"}`;
@@ -219,6 +308,7 @@ Réponds UNIQUEMENT en JSON valide:
     try { result = JSON.parse(text.replace(/```json|```/g, '').trim()); }
     catch { result = { recommendation: { name: '', why: text }, alternatives: [] }; }
     result._provider = provider;
+    if (mediaCtx.length) result._media = mediaCtx;
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message || 'Erreur IA' });
