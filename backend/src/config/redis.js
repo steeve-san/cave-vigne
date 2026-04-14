@@ -29,5 +29,11 @@ async function cacheSet(key, value, ttlSeconds = 300) {
 async function cacheDel(pattern) {
   try { const r = await getRedis(); if (!r) return; const keys = await r.keys(pattern); if (keys.length) await r.del(keys); } catch {}
 }
+async function cacheFlush() {
+  try { const r = await getRedis(); if (!r) return 0; await r.flushDb(); return 1; } catch { return 0; }
+}
+async function cacheKeys(pattern = '*') {
+  try { const r = await getRedis(); if (!r) return []; return await r.keys(pattern); } catch { return []; }
+}
 
-module.exports = { cacheGet, cacheSet, cacheDel };
+module.exports = { cacheGet, cacheSet, cacheDel, cacheFlush, cacheKeys };

@@ -1,8 +1,9 @@
 // src/pages/AdminPage.jsx
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminAPI } from '../services/api';
 import { useLang } from '../context/LangContext';
+import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
 const ROLES = ['visiteur', 'user', 'admin'];
@@ -19,9 +20,19 @@ function RoleBadge({ role, t }) {
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 function SettingsTab() {
   const { t } = useLang();
+  const { logout } = useAuth();
   const qc = useQueryClient();
   const [vals, setVals] = useState({});
   const [testingSmtp, setTestingSmtp] = useState(false);
+  const [logoutCountdown, setLogoutCountdown] = useState(null);
+
+  // Auto-logout countdown after settings save
+  useEffect(() => {
+    if (logoutCountdown === null) return;
+    if (logoutCountdown === 0) { logout(); return; }
+    const t = setTimeout(() => setLogoutCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [logoutCountdown, logout]);
 
   const { data: settings = [], isLoading } = useQuery({
     queryKey: ['admin-settings'],
@@ -35,7 +46,15 @@ function SettingsTab() {
 
   const saveMut = useMutation({
     mutationFn: (data) => adminAPI.saveSettings(data),
-    onSuccess: () => { toast.success('Paramètres enregistrés'); qc.invalidateQueries(['admin-settings']); },
+    onSuccess: (res) => {
+      qc.invalidateQueries(['admin-settings']);
+      if (res.data?.force_logout) {
+        toast.success('Paramètres sauvegardés — cache et sessions vidés. Déconnexion dans 3s…', { duration: 4000 });
+        setLogoutCountdown(3);
+      } else {
+        toast.success('Paramètres enregistrés');
+      }
+    },
     onError: (e) => toast.error(e.response?.data?.error || 'Erreur'),
   });
 
@@ -289,11 +308,190 @@ function SettingsTab() {
       </div>
 
       {/* Bouton save */}
-      <div className="col-12 d-flex justify-content-end">
-        <button className="btn btn-gold" onClick={() => saveMut.mutate(vals)} disabled={saveMut.isPending}>
-          {saveMut.isPending ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-check2 me-1"></i>}
-          {t('admin.settings.save')}
+      <div className="col-12 d-flex align-items-center justify-content-between">
+        <div style={{ fontSize: '0.75rem', color: 'var(--cv-text3)' }}>
+          <i className="bi bi-shield-lock me-1" style={{ color: 'var(--cv-gold)' }} />
+          La sauvegarde vide le cache Redis et déconnecte toutes les sessions.
+        </div>
+        <button className="btn btn-gold" onClick={() => saveMut.mutate(vals)} disabled={saveMut.isPending || logoutCountdown !== null}>
+          {saveMut.isPending
+            ? <span className="spinner-border spinner-border-sm me-1" />
+            : logoutCountdown !== null
+              ? <span className="me-1">{logoutCountdown}s</span>
+              : <i className="bi bi-check2 me-1" />}
+          {logoutCountdown !== null ? `Déconnexion…` : t('admin.settings.save')}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Cache & Sessions Tab ──────────────────────────────────────────────────────
+function CacheTab() {
+  const { logout } = useAuth();
+  const qc = useQueryClient();
+  const [clearing, setClearing] = useState(null);
+
+  const { data: cacheData, isLoading: cacheLoading, refetch: refetchCache } = useQuery({
+    queryKey: ['cache-stats'],
+    queryFn: () => adminAPI.cacheStats().then(r => r.data),
+    refetchInterval: 10000,
+  });
+
+  const { data: sessData, isLoading: sessLoading, refetch: refetchSess } = useQuery({
+    queryKey: ['sessions-stats'],
+    queryFn: () => adminAPI.getSessions().then(r => r.data),
+  });
+
+  const clearCache = async (category) => {
+    setClearing(category);
+    try {
+      const r = await adminAPI.clearCache(category);
+      toast.success(r.data.message);
+      refetchCache();
+    } catch (e) {
+      toast.error(e.response?.data?.error || 'Erreur Redis');
+    } finally { setClearing(null); }
+  };
+
+  const revokeUser = async (userId, username) => {
+    try {
+      const r = await adminAPI.revokeUserSessions(userId);
+      toast.success(r.data.message);
+      refetchSess();
+    } catch (e) { toast.error(e.response?.data?.error || 'Erreur'); }
+  };
+
+  const revokeAll = async () => {
+    try {
+      const r = await adminAPI.revokeAllSessions();
+      toast.success(r.data.message, { duration: 4000 });
+      if (r.data.force_logout) setTimeout(() => logout(), 2000);
+    } catch (e) { toast.error(e.response?.data?.error || 'Erreur'); }
+  };
+
+  const CATEGORY_ICONS = { stats: 'bi-bar-chart', enrich: 'bi-stars', sommelier: 'bi-chat-square-dots', barcode: 'bi-upc', other: 'bi-archive' };
+
+  return (
+    <div className="row g-4">
+      {/* Cache Redis */}
+      <div className="col-12">
+        <div className="card">
+          <div className="card-header d-flex align-items-center justify-content-between">
+            <h6 className="card-title mb-0"><i className="bi bi-lightning me-2" style={{ color: 'var(--cv-gold)' }} />Cache Redis</h6>
+            <div className="d-flex align-items-center gap-2">
+              {cacheData && (
+                <span style={{ fontSize: '0.72rem', color: 'var(--cv-text3)' }}>
+                  {cacheData.total} clé{cacheData.total !== 1 ? 's' : ''} en cache
+                </span>
+              )}
+              <button className="btn btn-sm btn-wine" onClick={() => clearCache('all')} disabled={clearing === 'all'}>
+                {clearing === 'all' ? <span className="spinner-border spinner-border-sm me-1" /> : <i className="bi bi-trash me-1" />}
+                Tout vider
+              </button>
+            </div>
+          </div>
+          <div className="card-body p-3">
+            {cacheLoading ? (
+              <div className="placeholder-glow d-flex flex-wrap gap-2">
+                {[1,2,3,4].map(i => <div key={i} className="placeholder rounded" style={{ width: 160, height: 52, opacity: 0.12 }} />)}
+              </div>
+            ) : (
+              <div className="row g-2">
+                {(cacheData?.categories || []).map(cat => (
+                  <div className="col-6 col-md-3" key={cat.id}>
+                    <div style={{ background: 'var(--cv-bg2)', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--cv-border)' }}>
+                      <div className="d-flex align-items-center justify-content-between mb-1">
+                        <span style={{ fontSize: '0.72rem', color: 'var(--cv-text3)' }}>
+                          <i className={`bi ${CATEGORY_ICONS[cat.id] || 'bi-archive'} me-1`} />{cat.label}
+                        </span>
+                        <span style={{ fontSize: '1rem', fontFamily: 'Cormorant Garamond,serif', color: cat.count > 0 ? 'var(--cv-gold)' : 'var(--cv-text3)', fontWeight: 700 }}>
+                          {cat.count}
+                        </span>
+                      </div>
+                      <button className="btn btn-sm w-100" disabled={cat.count === 0 || clearing === cat.id}
+                        style={{ fontSize: '0.68rem', padding: '2px 6px', border: '1px solid var(--cv-border)', background: 'none', color: cat.count > 0 ? 'var(--cv-text2)' : 'var(--cv-text3)' }}
+                        onClick={() => clearCache(cat.id === 'other' ? 'all' : cat.id)}>
+                        {clearing === cat.id ? <span className="spinner-border spinner-border-sm" style={{ width: 10, height: 10 }} /> : <i className="bi bi-x me-1" />}
+                        Vider
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Sessions actives */}
+      <div className="col-12">
+        <div className="card">
+          <div className="card-header d-flex align-items-center justify-content-between">
+            <h6 className="card-title mb-0">
+              <i className="bi bi-people me-2" style={{ color: 'var(--cv-gold)' }} />
+              Sessions actives
+              {sessData && (
+                <span className="ms-2" style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', fontFamily: 'Inter,sans-serif', fontWeight: 400 }}>
+                  {sessData.total} token{sessData.total !== 1 ? 's' : ''} refresh valide{sessData.total !== 1 ? 's' : ''}
+                </span>
+              )}
+            </h6>
+            <button className="btn btn-sm btn-wine" onClick={revokeAll} disabled={sessLoading || !sessData?.total}>
+              <i className="bi bi-door-closed me-1" />Déconnecter tous
+            </button>
+          </div>
+          <div className="card-body p-3">
+            {sessLoading ? (
+              <div className="placeholder-glow"><div className="placeholder w-100 rounded" style={{ height: 40, opacity: 0.12 }} /></div>
+            ) : !sessData?.users?.length ? (
+              <div style={{ fontSize: '0.82rem', color: 'var(--cv-text3)', textAlign: 'center', padding: '16px 0' }}>
+                <i className="bi bi-check-circle me-2" />Aucune session active
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-sm mb-0" style={{ fontSize: '0.8rem' }}>
+                  <thead>
+                    <tr style={{ color: 'var(--cv-text3)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: 1 }}>
+                      <th style={{ background: 'none', border: 'none' }}>Utilisateur</th>
+                      <th style={{ background: 'none', border: 'none' }}>Rôle</th>
+                      <th style={{ background: 'none', border: 'none', textAlign: 'center' }}>Sessions</th>
+                      <th style={{ background: 'none', border: 'none' }}>Expire</th>
+                      <th style={{ background: 'none', border: 'none' }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessData.users.map(u => (
+                      <tr key={u.id} style={{ borderColor: 'var(--cv-border)' }}>
+                        <td style={{ color: 'var(--cv-text)', verticalAlign: 'middle' }}>
+                          <div style={{ fontWeight: 500 }}>{u.username}</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--cv-text3)' }}>{u.email}</div>
+                        </td>
+                        <td style={{ verticalAlign: 'middle' }}>
+                          <span style={{ fontSize: '0.68rem', padding: '2px 7px', borderRadius: 4, background: u.role === 'admin' ? 'rgba(201,168,76,0.15)' : 'rgba(255,255,255,0.06)', color: u.role === 'admin' ? 'var(--cv-gold)' : 'var(--cv-text2)' }}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td style={{ verticalAlign: 'middle', textAlign: 'center', color: 'var(--cv-gold)', fontFamily: 'Cormorant Garamond,serif', fontSize: '1rem' }}>
+                          {u.session_count}
+                        </td>
+                        <td style={{ verticalAlign: 'middle', color: 'var(--cv-text3)', fontSize: '0.72rem' }}>
+                          {new Date(u.last_expires).toLocaleDateString('fr-FR')}
+                        </td>
+                        <td style={{ verticalAlign: 'middle', textAlign: 'right' }}>
+                          <button className="btn btn-sm" style={{ fontSize: '0.68rem', border: '1px solid rgba(220,53,69,0.3)', color: '#dc3545', background: 'none', padding: '2px 8px' }}
+                            onClick={() => revokeUser(u.id, u.username)}>
+                            <i className="bi bi-x me-1" />Révoquer
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -372,9 +570,13 @@ export default function AdminPage() {
         <button style={tabStyle(activeTab === 'settings')} onClick={() => setActiveTab('settings')}>
           <i className="bi bi-gear me-1"></i>{t('admin.tabSettings')}
         </button>
+        <button style={tabStyle(activeTab === 'cache')} onClick={() => setActiveTab('cache')}>
+          <i className="bi bi-lightning me-1"></i>Cache & Sessions
+        </button>
       </div>
 
       {activeTab === 'settings' && <SettingsTab />}
+      {activeTab === 'cache'    && <CacheTab />}
 
       {activeTab === 'users' && <>
       {/* Stats rapides */}

@@ -140,10 +140,15 @@ export const adminAPI = {
   createUser:  (data)       => api.post('/auth/admin/users', data),
   updateUser:  (id, data)   => api.put(`/auth/admin/users/${id}`, data),
   deleteUser:  (id)         => api.delete(`/auth/admin/users/${id}`),
-  getSettings: ()           => api.get('/settings'),
-  saveSettings:(data)       => api.put('/settings', data),
-  testSmtp:    ()           => api.post('/settings/test-smtp'),
-  publicConfig:()           => api.get('/settings/public'),
+  getSettings:   ()              => api.get('/settings'),
+  saveSettings:  (data)          => api.put('/settings', data),
+  testSmtp:      ()              => api.post('/settings/test-smtp'),
+  publicConfig:  ()              => api.get('/settings/public'),
+  cacheStats:    ()              => api.get('/settings/cache-stats'),
+  clearCache:    (category)      => api.post('/settings/clear-cache', { category }),
+  getSessions:   ()              => api.get('/settings/sessions'),
+  revokeAllSessions: ()          => api.delete('/settings/sessions'),
+  revokeUserSessions: (userId)   => api.delete(`/settings/sessions/${userId}`),
 };
 
 // ─── Auth 2FA ─────────────────────────────────────────────────────────────────
