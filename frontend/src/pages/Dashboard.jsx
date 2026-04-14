@@ -310,21 +310,23 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : donutData ? (
-                <div style={{ width: '100%', maxWidth: 220, position: 'relative' }}>
-                  <Doughnut data={donutData} options={donutOptions} />
-                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -60%)', textAlign: 'center' }}>
-                    <div style={{ fontSize: '1.6rem', fontFamily: 'Cormorant Garamond,serif', color: 'var(--cv-gold)', fontWeight: 700 }}>{stats?.total_bottles || 0}</div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--cv-text3)', textTransform: 'uppercase', letterSpacing: 1 }}>btl.</div>
-                  </div>
-                </div>
-                {stats?.avg_rating && (
-                  <div className="mt-3 pt-3 w-100" style={{ borderTop: '0.5px solid var(--cv-border)', textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--cv-text3)', letterSpacing: 2, textTransform: 'uppercase' }}>{t('dashboard.avgAccordRating')}</div>
-                    <div style={{ fontSize: '1.4rem', fontFamily: 'Cormorant Garamond, serif', color: 'var(--cv-gold)' }}>
-                      {'★'.repeat(Math.round(stats.avg_rating))}{'☆'.repeat(5 - Math.round(stats.avg_rating))} {stats.avg_rating}
+                <>
+                  <div style={{ width: '100%', maxWidth: 220, position: 'relative' }}>
+                    <Doughnut data={donutData} options={donutOptions} />
+                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -60%)', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.6rem', fontFamily: 'Cormorant Garamond,serif', color: 'var(--cv-gold)', fontWeight: 700 }}>{stats?.total_bottles || 0}</div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--cv-text3)', textTransform: 'uppercase', letterSpacing: 1 }}>btl.</div>
                     </div>
                   </div>
-                )}
+                  {stats?.avg_rating && (
+                    <div className="mt-3 pt-3 w-100" style={{ borderTop: '0.5px solid var(--cv-border)', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--cv-text3)', letterSpacing: 2, textTransform: 'uppercase' }}>{t('dashboard.avgAccordRating')}</div>
+                      <div style={{ fontSize: '1.4rem', fontFamily: 'Cormorant Garamond, serif', color: 'var(--cv-gold)' }}>
+                        {'★'.repeat(Math.round(stats.avg_rating))}{'☆'.repeat(5 - Math.round(stats.avg_rating))} {stats.avg_rating}
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : null}
             </div>
           </div>
