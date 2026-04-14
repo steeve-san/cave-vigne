@@ -57,6 +57,12 @@
 | 🌙 **"Que boire ce soir ?"** | L'IA choisit dans votre cave selon occasion, convives, envie |
 | 🔎 **Région spotlight** | Analyse IA d'une région viticole depuis la carte France |
 | 🌐 **Catalogue public** | Visiteurs non connectés peuvent consulter la cave si activé (VisitorAllowed sans redirection login) |
+| 🖼️ **Vue galerie** | Basculement liste/galerie sur la page vins — grille d'étiquettes cliquables avec badge quantité et overlay "bu" |
+| 📅 **Gantt apogée** | Calendrier de dégustation (±8 ans) : barres empilées par type de vin, apogées en cours surlignées |
+| 💰 **Historique des prix** | Enregistrement manuel ou automatique des prix par bouteille (source + date) |
+| ✅ **Actions groupées** | Sélection multiple → marquer comme bu ou supprimer en une seule requête SQL (`IN (...)`) |
+| 🏅 **Score qualité** | Score d'enrichissement (0–100) calculé sur 13 champs clés — affiché dans le panneau d'enrichissement |
+| 📖 **API docs (Swagger)** | Documentation interactive OpenAPI disponible sur `/api/docs` |
 
 ---
 
@@ -312,7 +318,8 @@ L'application Android est une WebView Kotlin qui encapsule l'application web ave
 - Mots de passe hashés avec **bcrypt** (salt factor 12)
 - **JWT** avec expiration courte (7j) + refresh token (30j)
 - **2FA TOTP** compatible Google Authenticator, FreeOTP, Authy
-- **Rate limiting** : 200 req/15min global, 20 req/15min sur auth
+- **Rate limiting** : 200 req/15min global, 20 req/15min sur auth, 5 req/min sur `/api/wines/:id/enrich` (par utilisateur)
+- **Cache enrichissement** : résultats Vivino/OFF mis en cache Redis 24h (bypass possible via `?refresh=1`)
 - **Helmet.js** — headers de sécurité HTTP
 - **CORS** restreint aux origines autorisées
 - **Cloudflare WAF** — protection SQLi, XSS, bots
