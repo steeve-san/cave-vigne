@@ -63,7 +63,7 @@ export const winesAPI = {
   remove:       (id)         => api.delete(`/wines/${id}`),
   addAccord:    (id, data)   => api.post(`/wines/${id}/accords`, data),
   stats:        ()           => api.get('/wines/stats'),
-  enrich:       (id)         => api.get(`/wines/${id}/enrich`),
+  enrich:       (id, refresh) => api.get(`/wines/${id}/enrich`, { params: refresh ? { refresh: 1 } : {} }),
   aiEnrich:     (id)         => api.post(`/wines/${id}/ai-enrich`),
   barcode:      (ean)        => api.get(`/wines/barcode/${ean}`),
   valueHistory: ()           => api.get('/wines/value-history'),
@@ -74,6 +74,9 @@ export const winesAPI = {
   qrcode:       (id)         => api.get(`/wines/${id}/qrcode`),
   importVivino: (file)       => { const fd = new FormData(); fd.append('file', file); return api.post('/wines/import-vivino', fd); },
   importOeni:   (file)       => { const fd = new FormData(); fd.append('file', file); return api.post('/wines/import-oeni', fd); },
+  batch:        (action, wineIds) => api.put('/wines/batch', { action, wineIds }),
+  priceHistory: (id)         => api.get(`/wines/${id}/price-history`),
+  addPrice:     (id, price, source) => api.post(`/wines/${id}/price-history`, { price, source }),
 };
 
 // ─── Beers ────────────────────────────────────────────────────────────────────

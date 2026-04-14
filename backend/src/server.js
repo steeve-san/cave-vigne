@@ -41,6 +41,27 @@ app.use('/uploads', express.static(process.env.UPLOAD_DIR || path.join(__dirname
   maxAge: '7d', etag: true, lastModified: true,
 }));
 
+// Swagger / OpenAPI docs (available at /api/docs)
+try {
+  const swaggerJsdoc = require('swagger-jsdoc');
+  const swaggerUi    = require('swagger-ui-express');
+  const swaggerSpec  = swaggerJsdoc({
+    definition: {
+      openapi: '3.0.0',
+      info: { title: 'Cave & Vigne API', version: process.env.npm_package_version || '1.1.0', description: 'REST API for wine cellar management' },
+      servers: [{ url: '/api' }],
+      components: {
+        securitySchemes: { BearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+      },
+      security: [{ BearerAuth: [] }],
+    },
+    apis: ['./src/routes/*.js'],
+  });
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { customSiteTitle: 'Cave & Vigne API' }));
+  app.get('/api/docs.json', (_req, res) => res.json(swaggerSpec));
+  console.log('[swagger] Docs disponibles sur /api/docs');
+} catch { console.warn('[swagger] swagger-jsdoc/swagger-ui-express non installé — npm install pour activer'); }
+
 // Routes
 app.use('/api/auth',     require('./routes/auth'));
 app.use('/api/wines',    require('./routes/wines'));

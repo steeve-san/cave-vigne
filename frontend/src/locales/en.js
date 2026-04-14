@@ -101,9 +101,12 @@ const en = {
   tasting: {
     title: 'Tasting notes',
     add: 'Add a note',
+    newNote: 'New tasting note',
     robe: 'Color', nose: 'Nose', mouth: 'Palate', finish: 'Finish',
     score: 'Score /100', photo: 'Tasting photo',
     addPhoto: 'Add a photo',
+    choosePhoto: 'Choose a photo',
+    overall: 'General comment',
     empty: 'No tasting notes',
     saved: 'Note saved!',
     deleted: 'Note deleted',

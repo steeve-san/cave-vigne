@@ -45,7 +45,8 @@ export default function StatsPage() {
     <div className="alert alert-danger">{t('common.error')}</div>
   );
 
-  const { by_region = [], by_type = [], by_country = [], rotation = [], summary = {} } = data || {};
+  const { by_region = [], by_type = [], by_country = [], rotation = [], summary = {}, peak_timeline = [] } = data || {};
+  const nowYear = new Date().getFullYear();
 
   // ── Summary cards ─────────────────────────────────────────────────────────
   const summaryCards = [
@@ -198,6 +199,69 @@ export default function StatsPage() {
           </div>
         )}
       </div>
+
+      {/* Peak timeline / Gantt */}
+      {peak_timeline.length > 0 && (
+        <div className="row g-3 mb-4">
+          <div className="col-12">
+            <div className="card">
+              <div className="card-header">
+                <h6 className="card-title"><i className="bi bi-calendar3 me-2" style={{ color: 'var(--cv-gold)' }} />Apogée des vins — calendrier de dégustation</h6>
+              </div>
+              <div className="card-body p-3">
+                <div style={{ fontSize: '0.72rem', color: 'var(--cv-text3)', marginBottom: 12 }}>
+                  Fenêtre {nowYear - 2}–{nowYear + 8} · barres proportionnelles au nombre de bouteilles
+                </div>
+                {(() => {
+                  const maxBottles = Math.max(...peak_timeline.map(r => r.total), 1);
+                  const TYPE_COLORS_GANTT = { rouge: '#8B1A1A', blanc: '#C9A84C', rosé: '#C06080', pétillant: '#1A3A7A' };
+                  return peak_timeline.map(row => (
+                    <div key={row.year} className="mb-2">
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <div style={{ width: 42, flexShrink: 0, textAlign: 'right', fontSize: '0.78rem',
+                          color: row.year < nowYear ? '#dc3545' : row.year <= nowYear + 1 ? '#4CAF50' : 'var(--cv-gold)',
+                          fontWeight: row.year >= nowYear - 1 && row.year <= nowYear + 1 ? 700 : 400 }}>
+                          {row.year}
+                          {row.year >= nowYear - 1 && row.year <= nowYear + 1 && <span style={{ fontSize: '0.6rem', marginLeft: 2 }}>★</span>}
+                        </div>
+                        <div style={{ flex: 1, height: 18, borderRadius: 4, overflow: 'hidden', background: 'var(--cv-bg3)', display: 'flex' }}>
+                          {Object.entries(row.byType).map(([type, bottles]) => (
+                            <div key={type}
+                              title={`${type}: ${bottles} btl.`}
+                              style={{ width: `${(bottles / maxBottles) * 100}%`, minWidth: bottles > 0 ? 4 : 0,
+                                background: TYPE_COLORS_GANTT[type] || '#6c757d',
+                                opacity: row.year < nowYear ? 0.45 : 1, transition: 'width 0.5s ease' }} />
+                          ))}
+                        </div>
+                        <div style={{ width: 28, flexShrink: 0, fontSize: '0.72rem', color: 'var(--cv-gold)', textAlign: 'right' }}>
+                          {row.total}×
+                        </div>
+                      </div>
+                      {row.sample?.slice(0, 2).map((n, i) => (
+                        <div key={i} style={{ fontSize: '0.68rem', color: 'var(--cv-text3)', marginLeft: 50, marginTop: -2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {n}
+                        </div>
+                      ))}
+                    </div>
+                  ));
+                })()}
+                <div className="d-flex gap-3 mt-3" style={{ flexWrap: 'wrap' }}>
+                  {[['rouge','#8B1A1A','Rouge'], ['blanc','#C9A84C','Blanc'], ['rosé','#C06080','Rosé'], ['pétillant','#1A3A7A','Pétillant']].map(([type, color, label]) => (
+                    <div key={type} className="d-flex align-items-center gap-1" style={{ fontSize: '0.72rem', color: 'var(--cv-text3)' }}>
+                      <div style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
+                      {label}
+                    </div>
+                  ))}
+                  <div className="d-flex align-items-center gap-1 ms-auto" style={{ fontSize: '0.68rem', color: 'var(--cv-text3)' }}>
+                    <span style={{ color: '#4CAF50' }}>★</span> apogée maintenant
+                    <span style={{ color: '#dc3545', marginLeft: 8 }}>■</span> passé
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="row g-3 mb-4">
         {/* Rotation chart */}

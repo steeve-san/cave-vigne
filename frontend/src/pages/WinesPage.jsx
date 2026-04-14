@@ -377,14 +377,14 @@ function WineModal({ wine, prefill, onClose, onSave }) {
                             {note.photo_url && (() => {
                               const API_BASE = import.meta.env.REACT_APP_API_URL?.replace('/api', '') || '';
                               return (
-                                <img src={`${API_BASE}${note.photo_url}`} alt="photo dégustation"
+                                <img src={`${API_BASE}${note.photo_url}`} alt={t('tasting.photo')}
                                   style={{ width: '100%', maxHeight: 140, objectFit: 'cover', borderRadius: 6, marginBottom: 8 }} />
                               );
                             })()}
-                            {note.color_desc && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>Robe:</strong> {note.color_desc}</div>}
-                            {note.nose && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>Nez:</strong> {note.nose}</div>}
-                            {note.palate && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>Bouche:</strong> {note.palate}</div>}
-                            {note.finish && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>Finale:</strong> {note.finish}</div>}
+                            {note.color_desc && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>{t('tasting.robe')}:</strong> {note.color_desc}</div>}
+                            {note.nose && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>{t('tasting.nose')}:</strong> {note.nose}</div>}
+                            {note.palate && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>{t('tasting.mouth')}:</strong> {note.palate}</div>}
+                            {note.finish && <div style={{ fontSize: '0.8rem', color: 'var(--cv-text)' }}><strong>{t('tasting.finish')}:</strong> {note.finish}</div>}
                             {note.overall && <div style={{ fontSize: '0.82rem', color: 'var(--cv-text2)', fontStyle: 'italic', marginTop: 4 }}>{note.overall}</div>}
                           </div>
                         </div>
@@ -393,48 +393,48 @@ function WineModal({ wine, prefill, onClose, onSave }) {
                   )}
                   {/* Add new note */}
                   <div style={{ borderTop: tastingNotes.length ? '0.5px solid var(--cv-border)' : 'none', paddingTop: tastingNotes.length ? '1rem' : 0 }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--cv-gold)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>Nouvelle note de dégustation</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--cv-gold)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>{t('tasting.newNote')}</div>
                     <div className="row g-2">
                       <div className="col-md-6">
-                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Date</label>
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('tasting.date')}</label>
                         <input className="form-control form-control-sm" type="date" value={newTasting.tasted_at}
                           onChange={e => setNewTasting(f => ({ ...f, tasted_at: e.target.value }))} />
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Note /100</label>
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('tasting.score')}</label>
                         <input className="form-control form-control-sm" type="number" min="1" max="100" value={newTasting.rating}
                           onChange={e => setNewTasting(f => ({ ...f, rating: e.target.value }))} placeholder="90" />
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Robe</label>
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('tasting.robe')}</label>
                         <input className="form-control form-control-sm" value={newTasting.color_desc}
                           onChange={e => setNewTasting(f => ({ ...f, color_desc: e.target.value }))} placeholder="Rubis profond, grenat…" />
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Nez</label>
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('tasting.nose')}</label>
                         <input className="form-control form-control-sm" value={newTasting.nose}
                           onChange={e => setNewTasting(f => ({ ...f, nose: e.target.value }))} placeholder="Fruits noirs, épices…" />
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Bouche</label>
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('tasting.mouth')}</label>
                         <input className="form-control form-control-sm" value={newTasting.palate}
                           onChange={e => setNewTasting(f => ({ ...f, palate: e.target.value }))} placeholder="Tanins soyeux…" />
                       </div>
                       <div className="col-md-6">
-                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Finale</label>
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('tasting.finish')}</label>
                         <input className="form-control form-control-sm" value={newTasting.finish}
                           onChange={e => setNewTasting(f => ({ ...f, finish: e.target.value }))} placeholder="Longue, persistante…" />
                       </div>
                       <div className="col-12">
-                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Commentaire général</label>
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('tasting.overall')}</label>
                         <textarea className="form-control form-control-sm" rows={3} value={newTasting.overall}
                           onChange={e => setNewTasting(f => ({ ...f, overall: e.target.value }))} placeholder="Impressions générales, accord suggéré…" />
                       </div>
                       <div className="col-12">
-                        <label className="form-label" style={{ fontSize: '0.8rem' }}>Photo de dégustation</label>
+                        <label className="form-label" style={{ fontSize: '0.8rem' }}>{t('tasting.photo')}</label>
                         <div className="d-flex align-items-center gap-2">
                           <label className="btn btn-sm btn-outline-gold" style={{ cursor: 'pointer', marginBottom: 0 }}>
-                            <i className="bi bi-camera me-1"></i>{tastingPhoto ? tastingPhoto.name : 'Choisir une photo'}
+                            <i className="bi bi-camera me-1"></i>{tastingPhoto ? tastingPhoto.name : t('tasting.choosePhoto')}
                             <input type="file" accept="image/*" style={{ display: 'none' }}
                               onChange={e => setTastingPhoto(e.target.files[0] || null)} />
                           </label>
@@ -529,6 +529,7 @@ export default function WinesPage() {
   const [modal, setModal] = useState(null); // null | { mode: 'add'|'edit'|'accord'|'barcode', wine? }
   const [selected, setSelected] = useState(new Set());
   const [bulkMode, setBulkMode] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'gallery'
   const [pendingBarcode, setPendingBarcode] = useState(null); // pre-filled form from barcode scan
   const importRef = useRef();
   const importVivinoRef = useRef();
@@ -541,8 +542,19 @@ export default function WinesPage() {
   const editMutation = useMutation({ mutationFn: ({ id, fd }) => winesAPI.update(id, fd), onSuccess: () => { qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']); toast.success('Vin modifié !'); } });
   const delMutation = useMutation({ mutationFn: winesAPI.remove, onSuccess: () => { qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']); toast.success('Vin supprimé'); } });
   const toggleDrunk = useMutation({
-    mutationFn: ({ id, is_drunk, quantity }) => { const fd = new FormData(); fd.append('is_drunk', !is_drunk ? 1 : 0); if (!is_drunk) fd.append('quantity', 0); else fd.append('quantity', 1); return winesAPI.update(id, fd); },
-    onSuccess: () => { qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']); },
+    mutationFn: ({ id, is_drunk }) => { const fd = new FormData(); fd.append('is_drunk', !is_drunk ? 1 : 0); if (!is_drunk) fd.append('quantity', 0); else fd.append('quantity', 1); return winesAPI.update(id, fd); },
+    // Optimistic update: flip status instantly, roll back on error
+    onMutate: async ({ id, is_drunk }) => {
+      await qc.cancelQueries(['wines']);
+      const prev = qc.getQueriesData(['wines']);
+      qc.setQueriesData(['wines'], old => {
+        if (!old?.wines) return old;
+        return { ...old, wines: old.wines.map(w => w.id === id ? { ...w, is_drunk: !is_drunk ? 1 : 0, quantity: !is_drunk ? 0 : 1 } : w) };
+      });
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => { if (ctx?.prev) ctx.prev.forEach(([key, val]) => qc.setQueryData(key, val)); },
+    onSettled: () => { qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']); },
   });
 
   const handleExport = async () => {
@@ -587,22 +599,22 @@ export default function WinesPage() {
 
   const handleBulkDelete = async () => {
     if (!selected.size || !window.confirm(`Supprimer ${selected.size} vin(s) ?`)) return;
-    await Promise.all([...selected].map(id => winesAPI.remove(id)));
-    qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']);
-    setSelected(new Set()); setBulkMode(false);
-    toast.success(`${selected.size} vin(s) supprimé(s)`);
+    try {
+      await winesAPI.batch('delete', [...selected]);
+      qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']);
+      setSelected(new Set()); setBulkMode(false);
+      toast.success(`${selected.size} vin(s) supprimé(s)`);
+    } catch { toast.error('Erreur lors de la suppression'); }
   };
 
   const handleBulkDrunk = async () => {
     if (!selected.size) return;
-    const fns = [...selected].map(id => {
-      const fd = new FormData(); fd.append('is_drunk', 1); fd.append('quantity', 0);
-      return winesAPI.update(id, fd);
-    });
-    await Promise.all(fns);
-    qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']);
-    setSelected(new Set()); setBulkMode(false);
-    toast.success(`${selected.size} vin(s) marqué(s) comme bus`);
+    try {
+      await winesAPI.batch('mark_drunk', [...selected]);
+      qc.invalidateQueries(['wines']); qc.invalidateQueries(['wine-stats']);
+      setSelected(new Set()); setBulkMode(false);
+      toast.success(`${selected.size} vin(s) marqué(s) comme bus`);
+    } catch { toast.error('Erreur lors de l\'opération'); }
   };
 
   const toggleSelect = (id) => setSelected(prev => {
@@ -661,6 +673,9 @@ export default function WinesPage() {
             <input ref={importRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImport} />
       <input ref={importVivinoRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleImportVivino} />
       <input ref={importOeniRef} type="file" accept=".csv,.json" style={{ display: 'none' }} onChange={handleImportOeni} />
+            <button className={`btn btn-sm ${viewMode === 'gallery' ? 'btn-gold' : 'btn-outline-gold'}`} onClick={() => setViewMode(v => v === 'gallery' ? 'list' : 'gallery')} title="Vue galerie">
+              <i className={`bi bi-${viewMode === 'gallery' ? 'list-ul' : 'grid-3x3-gap'}`}></i>
+            </button>
             <button className={`btn btn-sm ${bulkMode ? 'btn-gold' : 'btn-outline-gold'}`} onClick={() => { setBulkMode(v => !v); setSelected(new Set()); }} title="Sélection multiple">
               <i className="bi bi-check2-square"></i>
             </button>
@@ -698,7 +713,7 @@ export default function WinesPage() {
         </div>
       )}
 
-      {/* List */}
+      {/* List / Gallery */}
       {isLoading ? (
         <div className="text-center p-5"><div className="spinner-border" style={{ color: 'var(--cv-gold)' }} /></div>
       ) : wines.length === 0 ? (
@@ -707,7 +722,57 @@ export default function WinesPage() {
           <p>Aucun vin trouvé</p>
           <button className="btn btn-gold" onClick={() => setModal({ mode: 'add' })}>Ajouter votre premier vin</button>
         </div>
+      ) : viewMode === 'gallery' ? (
+        /* ── Gallery view ─────────────────────────────────────────────── */
+        <div className="row g-3">
+          {wines.map(w => {
+            const API_BASE = import.meta.env.REACT_APP_API_URL?.replace('/api', '') || '';
+            const imgSrc = w.label_image ? `${API_BASE}${w.label_image}` : null;
+            return (
+              <div className="col-6 col-md-4 col-lg-3 col-xl-2" key={w.id}>
+                <div
+                  className="card h-100"
+                  style={{ cursor: 'pointer', border: '1px solid var(--cv-border)', background: 'var(--cv-bg3)', transition: 'border-color .2s' }}
+                  onClick={() => setModal({ mode: 'edit', wine: w })}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--cv-gold)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--cv-border)'}
+                >
+                  <div style={{ position: 'relative', paddingTop: '140%', background: '#1a0f0f', borderRadius: '8px 8px 0 0', overflow: 'hidden' }}>
+                    {imgSrc ? (
+                      <img src={imgSrc} alt={w.name}
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
+                    ) : (
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem' }}>
+                        {TYPE_ICONS[w.type] || '🍷'}
+                      </div>
+                    )}
+                    {(w.is_drunk || w.quantity === 0) && (
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: 'var(--cv-text2)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 1 }}>bue</span>
+                      </div>
+                    )}
+                    {w.quantity > 1 && !w.is_drunk && (
+                      <div style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,0.6)', color: 'var(--cv-gold)', borderRadius: 4, padding: '1px 5px', fontSize: '0.65rem', fontWeight: 600 }}>
+                        ×{w.quantity}
+                      </div>
+                    )}
+                  </div>
+                  <div className="card-body p-2">
+                    <div style={{ fontFamily: 'Cormorant Garamond,serif', fontSize: '0.85rem', color: 'var(--cv-text)', lineHeight: 1.3, marginBottom: 2, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                      {w.name}
+                    </div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--cv-text3)' }}>
+                      {[w.vintage, w.appellation || w.region].filter(Boolean).join(' · ')}
+                    </div>
+                    {w.price && <div style={{ fontSize: '0.68rem', color: 'var(--cv-gold)', marginTop: 2 }}>{parseFloat(w.price).toFixed(0)} €</div>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
+        /* ── List view ────────────────────────────────────────────────── */
         <div className="row g-2">
           {wines.map(w => (
             <div className="col-12 col-lg-6" key={w.id}>

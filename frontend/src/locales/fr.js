@@ -152,9 +152,12 @@ const fr = {
   tasting: {
     title: 'Notes de dégustation',
     add: 'Ajouter une note',
+    newNote: 'Nouvelle note de dégustation',
     robe: 'Robe', nose: 'Nez', mouth: 'Bouche', finish: 'Finale',
     score: 'Note /100', photo: 'Photo de dégustation',
     addPhoto: 'Ajouter une photo',
+    choosePhoto: 'Choisir une photo',
+    overall: 'Commentaire général',
     empty: 'Aucune note de dégustation',
     saved: 'Note enregistrée !',
     deleted: 'Note supprimée',

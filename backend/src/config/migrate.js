@@ -221,6 +221,20 @@ async function migrate() {
       INDEX idx_sharing (sharing_id)
     ) ENGINE=InnoDB;
 
+    CREATE TABLE IF NOT EXISTS wine_price_history (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      wine_id INT NOT NULL,
+      user_id INT NOT NULL,
+      price DECIMAL(10,2) NOT NULL,
+      source VARCHAR(50) DEFAULT 'manual',
+      recorded_at DATE NOT NULL,
+      FOREIGN KEY (wine_id) REFERENCES wines(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE KEY unique_wine_date (wine_id, recorded_at),
+      INDEX idx_wine (wine_id),
+      INDEX idx_user (user_id)
+    ) ENGINE=InnoDB;
+
     CREATE TABLE IF NOT EXISTS barcode_cache (
       id INT AUTO_INCREMENT PRIMARY KEY,
       ean VARCHAR(20) NOT NULL,
@@ -286,6 +300,9 @@ async function migrate() {
     `ALTER TABLE wines ADD COLUMN IF NOT EXISTS certifications VARCHAR(500)`,
     `ALTER TABLE wines ADD COLUMN IF NOT EXISTS abv DECIMAL(4,1)`,
     `ALTER TABLE wines ADD COLUMN IF NOT EXISTS volume_ml SMALLINT DEFAULT 750`,
+    // Performance indexes
+    `ALTER TABLE wines ADD INDEX idx_drunk_qty (is_drunk, quantity)`,
+    `ALTER TABLE wines ADD INDEX idx_user_type (user_id, type)`,
     // Domain & photos — spirits
     `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS bottle_photo VARCHAR(500)`,
     `ALTER TABLE spirits ADD COLUMN IF NOT EXISTS domain_website VARCHAR(500)`,

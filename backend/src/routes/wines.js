@@ -1,6 +1,7 @@
 // src/routes/wines.js
 const router = require('express').Router();
 const { body, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const db = require('../config/db');
 const auth = require('../middleware/auth');
 const { requireRole, optionalAuth } = require('../middleware/auth');
@@ -9,6 +10,22 @@ const multer = require('multer');
 const path = require('path');
 const sharp = require('sharp');
 const fs = require('fs');
+
+// Rate limiter spécifique pour /enrich (déclenche jusqu'à 9 requêtes externes)
+const enrichLimiter = rateLimit({
+  windowMs: 60_000, max: 5,
+  keyGenerator: req => String(req.user?.id || req.ip),
+  skip: req => req.user?.role === 'admin',
+  message: { error: 'Trop de demandes d\'enrichissement, réessayez dans 1 minute' },
+});
+
+// Calcule un score de qualité (0-100) et liste les champs remplis
+function calcQuality(result) {
+  const KEY_FIELDS = ['name','producer','vintage','type','region','appellation','country','grapes',
+                      'notes','food_pairings','label_image','abv','certifications'];
+  const filled = KEY_FIELDS.filter(k => result[k] != null && result[k] !== '');
+  return { quality_score: Math.round(filled.length / KEY_FIELDS.length * 100), filled_fields: filled };
+}
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -57,8 +74,9 @@ router.get('/', optionalAuth, async (req, res) => {
     }
 
     if (search) {
-      where.push('MATCH(w.name, w.appellation, w.producer, w.region, w.grapes) AGAINST(? IN BOOLEAN MODE)');
-      params.push(`*${search}*`);
+      where.push('(w.name LIKE ? OR w.appellation LIKE ? OR w.producer LIKE ? OR w.region LIKE ? OR w.grapes LIKE ?)');
+      const s = `%${search}%`;
+      params.push(s, s, s, s, s);
     }
     if (type)  { where.push('w.type = ?'); params.push(type); }
     if (status === 'stock') { where.push('w.is_drunk = 0 AND w.quantity > 0'); }
@@ -73,7 +91,7 @@ router.get('/', optionalAuth, async (req, res) => {
     const lim = Math.min(100, parseInt(limit));
 
     const sql = `SELECT w.*, u.username as owner_username,
-      GROUP_CONCAT(JSON_OBJECT('id',a.id,'food',a.food,'stars',a.stars,'notes',a.notes)) as accords_raw
+      JSON_ARRAYAGG(JSON_OBJECT('id',a.id,'food',a.food,'stars',a.stars,'notes',a.notes)) as accords_raw
       FROM wines w
       LEFT JOIN users u ON u.id = w.user_id
       LEFT JOIN wine_accords a ON a.wine_id = w.id
@@ -92,10 +110,8 @@ router.get('/', optionalAuth, async (req, res) => {
     const wines = rows.map(w => ({
       ...w,
       accords: w.accords_raw
-        ? [...new Map(w.accords_raw.split('},{').map(s => {
-            try { const o = JSON.parse(s.startsWith('{') ? s : '{' + s); return [o.id, o]; }
-            catch { return [null, null]; }
-          }).filter(([k]) => k)).values()]
+        ? (Array.isArray(w.accords_raw) ? w.accords_raw : JSON.parse(w.accords_raw))
+            .filter(a => a?.id != null)
         : [],
       accords_raw: undefined,
     }));
@@ -209,11 +225,15 @@ router.get('/export', auth, async (req, res) => {
     const params = role === 'user' ? [req.user.id] : [];
     const [rows] = await db.query(
       `SELECT name, appellation, vintage, type, producer, region, country, grapes,
-              quantity, price, keep_until, position, notes, is_drunk, created_at
+              quantity, price, keep_until, position, notes, is_drunk,
+              abv, volume_ml, certifications, food_pairings,
+              domain_website, soil_type, altitude, created_at
        FROM wines ${condition} ORDER BY name`, params
     );
     const headers = ['name','appellation','vintage','type','producer','region','country','grapes',
-                     'quantity','price','keep_until','position','notes','is_drunk','created_at'];
+                     'quantity','price','keep_until','position','notes','is_drunk',
+                     'abv','volume_ml','certifications','food_pairings',
+                     'domain_website','soil_type','altitude','created_at'];
     const escape = v => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`;
     const csv = [headers.join(','), ...rows.map(r => headers.map(h => escape(r[h])).join(','))].join('\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -479,11 +499,18 @@ async function downloadLabelImage(url, userId) {
   }
 }
 
-router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) => {
+router.get('/:id/enrich', auth, requireRole('user', 'admin'), enrichLimiter, async (req, res) => {
   try {
     const [rows] = await db.query('SELECT * FROM wines WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
     if (!rows.length) return res.status(404).json({ error: 'Vin introuvable' });
     const wine = rows[0];
+
+    // Cache 24h per (user, name, vintage) — skip if ?refresh=1
+    const enrichKey = `enrich:${req.user.id}:${encodeURIComponent((wine.name + ':' + (wine.vintage || '')).toLowerCase())}`;
+    if (!req.query.refresh) {
+      const cached = await cacheGet(enrichKey);
+      if (cached) return res.json({ ...cached, cached: true });
+    }
 
     // OFf: name + appellation (no vintage — confuses it)
     const query     = [wine.name, wine.appellation, wine.producer].filter(Boolean).join(' ');
@@ -499,11 +526,21 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
 
     const results = [];
 
+    // ── 1 & 2. Vivino + Open Food Facts — parallel label downloads ────────────
+    const viv     = vivinoR.status === 'fulfilled' ? vivinoR.value : null;
+    const offList = (offR.status === 'fulfilled' ? offR.value : null) || [];
+
+    const vivValid = !!(viv?.name && scoreRelevance(viv.name, wine.name) >= 0.2);
+    const validOff = offList.slice(0, 3).filter(p => p?.name);
+
+    // Download all labels concurrently (Vivino + up to 3 OFf)
+    const [vivLabel, ...offLabels] = await Promise.all([
+      vivValid ? downloadLabelImage(viv.label_url, req.user.id) : Promise.resolve(null),
+      ...validOff.map(p => downloadLabelImage(p.label_image, req.user.id)),
+    ]);
+
     // ── 1. Vivino ─────────────────────────────────────────────────────────────
-    const viv = vivinoR.status === 'fulfilled' ? vivinoR.value : null;
-    if (viv?.name && scoreRelevance(viv.name, wine.name) >= 0.2) {
-      // Download label to local storage so it can be saved on apply
-      const savedLabel = await downloadLabelImage(viv.label_url, req.user.id);
+    if (vivValid) {
       results.push({
         source:         'Vivino',
         name:           viv.name,
@@ -517,7 +554,7 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
         notes:          viv.notes          || null,
         food_pairings:  viv.food_pairings  || null,
         flavor_profile: viv.flavor_profile || null,
-        label_image:    savedLabel || viv.label_url || null,
+        label_image:    vivLabel || viv.label_url || null,
         rating:         viv.rating         || null,
         ratings_count:  viv.ratings_count  || null,
         price_avg:      viv.price_avg      || null,
@@ -526,10 +563,8 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
     }
 
     // ── 2. Open Food Facts — full fields ──────────────────────────────────────
-    const offList = (offR.status === 'fulfilled' ? offR.value : null) || [];
-    for (const p of offList.slice(0, 3)) {
-      if (!p?.name) continue;
-      const savedLabel = await downloadLabelImage(p.label_image, req.user.id);
+    for (let i = 0; i < validOff.length; i++) {
+      const p = validOff[i];
       results.push({
         source:         'Open Food Facts',
         name:           p.name,
@@ -540,7 +575,7 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
         grapes:         p.grapes         || null,
         abv:            p.abv            || null,
         certifications: p.certifications || null,
-        label_image:    savedLabel || p.label_image || null,
+        label_image:    offLabels[i] || p.label_image || null,
         volume_ml:      p.volume_ml      || null,
         stores:         p.stores         || null,
         manufacturing:  p.manufacturing  || null,
@@ -583,7 +618,19 @@ router.get('/:id/enrich', auth, requireRole('user', 'admin'), async (req, res) =
       if (livex?.name) results.push({ source: livex.source || 'Liv-ex', name: livex.name, producer: livex.producer || null });
     }
 
-    res.json({ results, query });
+    // ── B2. Merge ABV from OFf into Vivino result if missing ─────────────────
+    const vivinoResult = results.find(r => r.source === 'Vivino');
+    if (vivinoResult && !vivinoResult.abv) {
+      const offResult = results.find(r => r.source === 'Open Food Facts' && r.abv);
+      if (offResult) vivinoResult.abv = offResult.abv;
+    }
+
+    // ── B3. Quality score per result ──────────────────────────────────────────
+    const scoredResults = results.map(r => ({ ...r, ...calcQuality(r) }));
+
+    const payload = { results: scoredResults, query };
+    await cacheSet(enrichKey, payload, 24 * 3600);
+    res.json(payload);
   } catch (err) {
     console.error('[enrich]', err.message);
     res.json({ results: [], query: '', error: err.message });
@@ -763,6 +810,63 @@ router.post('/import-oeni', auth, requireRole('user','admin'), uploadFile.single
     await cacheDel('wines:all:*');
     res.json({ inserted, skipped, message: `${inserted} vin(s) importé(s) depuis Oeni` });
   } catch (err) { console.error('[import-oeni]', err); res.status(500).json({ error: 'Erreur import Oeni' }); }
+});
+
+// ─── PUT /api/wines/batch — opérations en masse sur plusieurs vins ────────────
+router.put('/batch', auth, requireRole('user', 'admin'), async (req, res) => {
+  const { action, wineIds } = req.body;
+  if (!Array.isArray(wineIds) || !wineIds.length) return res.status(400).json({ error: 'wineIds requis' });
+  const ids = wineIds.map(Number).filter(n => n > 0);
+  if (!ids.length) return res.status(400).json({ error: 'IDs invalides' });
+
+  try {
+    const placeholders = ids.map(() => '?').join(',');
+    const cond = req.user.role === 'admin'
+      ? `id IN (${placeholders})`
+      : `id IN (${placeholders}) AND user_id = ?`;
+    const params = req.user.role === 'admin' ? ids : [...ids, req.user.id];
+
+    if (action === 'mark_drunk') {
+      await db.query(`UPDATE wines SET is_drunk=1, quantity=0 WHERE ${cond}`, params);
+    } else if (action === 'restore') {
+      await db.query(`UPDATE wines SET is_drunk=0, quantity=1 WHERE ${cond}`, params);
+    } else if (action === 'delete') {
+      await db.query(`DELETE FROM wines WHERE ${cond}`, params);
+    } else {
+      return res.status(400).json({ error: 'Action invalide (mark_drunk|restore|delete)' });
+    }
+
+    await cacheDel(`wines:${req.user.id}:*`);
+    await cacheDel('wines:all:*');
+    res.json({ ok: true, affected: ids.length });
+  } catch (err) { console.error('[batch]', err); res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+// ─── GET/POST /api/wines/:id/price-history — historique des prix par bouteille ─
+router.get('/:id/price-history', auth, async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT id, price, source, recorded_at FROM wine_price_history
+       WHERE wine_id = ? AND user_id = ? ORDER BY recorded_at ASC LIMIT 60`,
+      [req.params.id, req.user.id]
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
+});
+
+router.post('/:id/price-history', auth, requireRole('user', 'admin'), async (req, res) => {
+  const { price, source } = req.body;
+  if (!price || isNaN(parseFloat(price))) return res.status(400).json({ error: 'Prix requis' });
+  try {
+    const [rows] = await db.query('SELECT id FROM wines WHERE id=? AND user_id=?', [req.params.id, req.user.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Vin introuvable' });
+    await db.query(
+      `INSERT INTO wine_price_history (wine_id, user_id, price, source, recorded_at) VALUES (?,?,?,?,CURDATE())
+       ON DUPLICATE KEY UPDATE price=VALUES(price), source=VALUES(source)`,
+      [req.params.id, req.user.id, parseFloat(price), source || 'manual']
+    );
+    res.status(201).json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erreur serveur' }); }
 });
 
 module.exports = router;

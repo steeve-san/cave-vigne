@@ -296,11 +296,20 @@ export default function Dashboard() {
 
       <div className="row g-3 mb-4">
         {/* Donut chart */}
-        {donutData && (
-          <div className="col-lg-4">
-            <div className="card h-100">
-              <div className="card-header"><h6 className="card-title">{t('dashboard.byType')}</h6></div>
-              <div className="card-body d-flex flex-column align-items-center justify-content-center p-3">
+        <div className="col-lg-4">
+          <div className="card h-100">
+            <div className="card-header"><h6 className="card-title">{t('dashboard.byType')}</h6></div>
+            <div className="card-body d-flex flex-column align-items-center justify-content-center p-3">
+              {statsLoading ? (
+                <div style={{ width: '100%', maxWidth: 220 }}>
+                  <div className="placeholder-glow">
+                    <div className="placeholder rounded-circle mx-auto d-block" style={{ width: 200, height: 200, opacity: 0.15 }} />
+                  </div>
+                  <div className="placeholder-glow mt-3 d-flex justify-content-center gap-2">
+                    {[70, 55, 45].map((w, i) => <span key={i} className="placeholder rounded" style={{ width: w, height: 12, opacity: 0.12 }} />)}
+                  </div>
+                </div>
+              ) : donutData ? (
                 <div style={{ width: '100%', maxWidth: 220, position: 'relative' }}>
                   <Doughnut data={donutData} options={donutOptions} />
                   <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -60%)', textAlign: 'center' }}>
@@ -316,10 +325,10 @@ export default function Dashboard() {
                     </div>
                   </div>
                 )}
-              </div>
+              ) : null}
             </div>
           </div>
-        )}
+        </div>
 
         {/* Quick actions */}
         <div className="col-lg-4">
@@ -459,16 +468,24 @@ export default function Dashboard() {
 
       {/* Value history + Aging tracker */}
       <div className="row g-3 mb-4">
-        {lineData && (
-          <div className="col-lg-7">
-            <div className="card h-100">
-              <div className="card-header">
-                <h6 className="card-title"><i className="bi bi-graph-up me-2" style={{ color: 'var(--cv-gold)' }} />{t('dashboard.valueHistory')}</h6>
-              </div>
-              <div className="card-body p-3"><Line data={lineData} options={lineOptions} /></div>
+        <div className="col-lg-7">
+          <div className="card h-100">
+            <div className="card-header">
+              <h6 className="card-title"><i className="bi bi-graph-up me-2" style={{ color: 'var(--cv-gold)' }} />{t('dashboard.valueHistory')}</h6>
+            </div>
+            <div className="card-body p-3">
+              {statsLoading || !lineData ? (
+                <div className="placeholder-glow">
+                  {[100, 75, 90, 60, 85, 70, 95].map((h, i) => (
+                    <div key={i} className="placeholder d-inline-block me-1" style={{ width: '12%', height: h, verticalAlign: 'bottom', opacity: 0.12, borderRadius: 3 }} />
+                  ))}
+                </div>
+              ) : (
+                <Line data={lineData} options={lineOptions} />
+              )}
             </div>
           </div>
-        )}
+        </div>
 
         {agingWines.length > 0 && (
           <div className={lineData ? 'col-lg-5' : 'col-12'}>

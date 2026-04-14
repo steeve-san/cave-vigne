@@ -97,7 +97,29 @@ router.get('/advanced', auth, async (req, res) => {
       [uid]
     );
 
-    const result = { by_region: byRegion, by_type: byType, by_country: byCountry, rotation, summary };
+    // Peak timeline — vins avec keep_until groupés par année (fenêtre ±8 ans)
+    const nowYear = new Date().getFullYear();
+    const [peakRows] = await db.query(
+      `SELECT keep_until as year, type, COUNT(*) as refs, SUM(quantity) as bottles,
+              GROUP_CONCAT(name ORDER BY name SEPARATOR '||' LIMIT 5) as sample_names
+       FROM wines
+       WHERE user_id = ? AND is_drunk=0 AND quantity>0 AND keep_until IS NOT NULL
+         AND keep_until BETWEEN ? AND ?
+       GROUP BY keep_until, type
+       ORDER BY keep_until ASC`,
+      [uid, nowYear - 2, nowYear + 8]
+    );
+    // Flatten into per-year entries with type breakdown
+    const peakByYear = {};
+    for (const r of peakRows) {
+      if (!peakByYear[r.year]) peakByYear[r.year] = { year: r.year, total: 0, byType: {}, sample: [] };
+      peakByYear[r.year].byType[r.type] = (peakByYear[r.year].byType[r.type] || 0) + parseInt(r.bottles);
+      peakByYear[r.year].total += parseInt(r.bottles);
+      peakByYear[r.year].sample.push(...(r.sample_names || '').split('||').filter(Boolean));
+    }
+    const peak_timeline = Object.values(peakByYear).sort((a, b) => a.year - b.year);
+
+    const result = { by_region: byRegion, by_type: byType, by_country: byCountry, rotation, summary, peak_timeline };
     await cacheSet(cacheKey, result, 120);
     res.json(result);
   } catch (err) {
